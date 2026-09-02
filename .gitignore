@@ -1,0 +1,8 @@
+node_modules/
+*.log
+.DS_Store
+dist/*
+!dist/fitgirl-enhanced.user.js
+test/e2e/layout.spec.ts-snapshots/
+test-results/
+playwright-report/

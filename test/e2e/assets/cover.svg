@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#11131a"/><stop offset=".55" stop-color="#7551a5"/><stop offset="1" stop-color="#df7b3e"/></linearGradient></defs>
+  <rect width="600" height="800" fill="url(#g)"/><circle cx="420" cy="250" r="170" fill="#f5c36c" opacity=".65"/><path d="M0 650 180 400l120 150 95-105 205 205v150H0Z" fill="#141720" opacity=".82"/>
+  <text x="44" y="88" fill="white" font-family="Georgia" font-size="47" font-weight="700">SAMPLE GAME</text><text x="47" y="130" fill="#ff3ba4" font-family="Arial" font-size="20" letter-spacing="5">DELUXE EDITION</text>
+</svg>
