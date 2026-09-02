@@ -5,7 +5,7 @@
   "type": "module",
   "private": true,
   "license": "MIT",
-  "author": "LuoYunXiao",
+  "author": "red352",
   "engines": {
     "node": ">=22.12"
   },

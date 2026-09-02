@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         FitGirl Web Enhanced
-// @namespace    https://github.com/LuoYunXiao/fitgirl-web-enhanced
+// @namespace    https://github.com/red352/fitgirl-web-enhanced
 // @version      1.2.0
-// @author       LuoYunXiao
+// @author       red352
 // @description  优化 FitGirl Repacks 的信息密度、宽屏布局、折叠内容与热门榜单。
 // @license      MIT
-// @homepageURL  https://github.com/LuoYunXiao/fitgirl-web-enhanced
-// @supportURL   https://github.com/LuoYunXiao/fitgirl-web-enhanced/issues
-// @downloadURL  https://raw.githubusercontent.com/LuoYunXiao/fitgirl-web-enhanced/main/dist/fitgirl-enhanced.user.js
-// @updateURL    https://raw.githubusercontent.com/LuoYunXiao/fitgirl-web-enhanced/main/dist/fitgirl-enhanced.user.js
+// @homepageURL  https://github.com/red352/fitgirl-web-enhanced
+// @supportURL   https://github.com/red352/fitgirl-web-enhanced/issues
+// @downloadURL  https://raw.githubusercontent.com/red352/fitgirl-web-enhanced/master/dist/fitgirl-enhanced.user.js
+// @updateURL    https://raw.githubusercontent.com/red352/fitgirl-web-enhanced/master/dist/fitgirl-enhanced.user.js
 // @match        https://fitgirl-repacks.site/*
 // @grant        none
 // @run-at       document-start

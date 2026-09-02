@@ -4,7 +4,7 @@
 
 FitGirl Web Enhanced 是面向 `fitgirl-repacks.site` 的渐进增强 Userscript。它将冗长的文章流重排为紧凑卡片与宽屏详情布局，同时保留全部原始正文、截图、试玩视频、下载链接和 magnet URL。随时可切换回原站布局，且选择会保存在浏览器中。
 
-[一键安装 Userscript](https://raw.githubusercontent.com/LuoYunXiao/fitgirl-web-enhanced/main/dist/fitgirl-enhanced.user.js) · [反馈问题](https://github.com/LuoYunXiao/fitgirl-web-enhanced/issues)
+[一键安装 Userscript](https://raw.githubusercontent.com/red352/fitgirl-web-enhanced/master/dist/fitgirl-enhanced.user.js) · [反馈问题](https://github.com/red352/fitgirl-web-enhanced/issues)
 
 ## 核心功能
 
@@ -42,10 +42,10 @@ FitGirl Web Enhanced 是面向 `fitgirl-repacks.site` 的渐进增强 Userscript
 ## 安装
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/)、Violentmonkey 或 Greasemonkey。
-2. 打开 [Raw 安装地址](https://raw.githubusercontent.com/LuoYunXiao/fitgirl-web-enhanced/main/dist/fitgirl-enhanced.user.js)。
+2. 打开 [Raw 安装地址](https://raw.githubusercontent.com/red352/fitgirl-web-enhanced/master/dist/fitgirl-enhanced.user.js)。
 3. 在脚本管理器的安装页确认。之后访问 `https://fitgirl-repacks.site/` 即可使用。
 
-脚本通过元数据中的 `@updateURL` 与 `@downloadURL` 检查 `main` 分支的发布产物；版本判断由 `@version` 驱动。
+脚本通过元数据中的 `@updateURL` 与 `@downloadURL` 检查 `master` 分支的发布产物；版本判断由 `@version` 驱动。
 
 ## 使用说明
 
@@ -108,12 +108,12 @@ npm run test:e2e
 
 - **页面看起来仍是原站：** 检查脚本是否启用，并确认地址为 HTTPS 的 `fitgirl-repacks.site`。
 - **部分文章未变成卡片：** Updates Digest 等特殊内容会故意使用全宽保守布局，确保不丢失正文。
-- **站点更新后排版异常：** 切换 Original View 后在 [Issues](https://github.com/LuoYunXiao/fitgirl-web-enhanced/issues) 提供页面地址、浏览器版本和截图。
+- **站点更新后排版异常：** 切换 Original View 后在 [Issues](https://github.com/red352/fitgirl-web-enhanced/issues) 提供页面地址、浏览器版本和截图。
 - **自动更新未触发：** 在脚本管理器中手动“检查更新”，并确认 GitHub Raw 可访问。
 
 ## 贡献
 
-欢迎提交 Issue 或 Pull Request。请保持改动聚焦，使用祈使式提交信息，并确保 `npm run check`、`npm run test:e2e` 和构建产物同步检查通过。维护者：[@LuoYunXiao](https://github.com/LuoYunXiao)。
+欢迎提交 Issue 或 Pull Request。请保持改动聚焦，使用祈使式提交信息，并确保 `npm run check`、`npm run test:e2e` 和构建产物同步检查通过。维护者：[@red352](https://github.com/red352)。
 
 ## 免责声明
 
@@ -121,4 +121,4 @@ npm run test:e2e
 
 ## 许可证
 
-[MIT](LICENSE) © 2026 LuoYunXiao
+[MIT](LICENSE) © 2026 red352
