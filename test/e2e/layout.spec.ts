@@ -246,6 +246,24 @@ test('热门面板支持焦点圈定、Esc 与焦点归还', async ({ page }) =>
   await expect(trigger).toBeFocused();
 });
 
+test('媒体截图点击打开磨砂玻璃预览对话框并支持翻页与Esc关闭', async ({ page }) => {
+  await page.goto('./');
+  const firstItem = page.locator('.fwe-game-card .fwe-media__item').first();
+  await firstItem.click();
+  const dialog = page.locator('.fwe-lightbox-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.fwe-lightbox__counter')).toHaveText('1 / 4');
+
+  await dialog.locator('.fwe-lightbox__nav--next').click();
+  await expect(dialog.locator('.fwe-lightbox__counter')).toHaveText('2 / 4');
+
+  await page.keyboard.press('ArrowLeft');
+  await expect(dialog.locator('.fwe-lightbox__counter')).toHaveText('1 / 4');
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+});
+
 test('桌面和移动视觉快照', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./');

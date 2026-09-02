@@ -75,6 +75,14 @@ export interface ArchiveGroup {
   items: ArchiveItem[];
 }
 
+export interface LightboxMedia {
+  type: 'image' | 'video';
+  src: string;
+  hdSrc?: string;
+  externalUrl?: string;
+  alt: string;
+}
+
 export interface StoredLayoutPreference {
   mode: LayoutMode;
   updatedAt: number;

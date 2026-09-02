@@ -173,6 +173,225 @@
   box-shadow: -18px 0 48px rgb(0 0 0 / 24%);
 }
 
+/* 2026 现代化磨砂玻璃图片/媒体灯箱预览器 */
+.fwe-lightbox-dialog {
+  box-sizing: border-box;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  width: 100vw;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+  border: 0;
+  background: transparent;
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.fwe-lightbox-dialog[open] {
+  display: flex;
+}
+
+.fwe-lightbox-dialog::backdrop {
+  background: rgb(8 8 12 / 72%);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+.fwe-lightbox {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: min(94vw, 1280px);
+  max-height: min(92dvh, 860px);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 14px;
+  background: rgb(20 20 28 / 82%);
+  box-shadow:
+    0 32px 80px rgb(0 0 0 / 60%),
+    0 0 0 1px rgb(255 255 255 / 8%) inset;
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  overflow: hidden;
+  animation: fwe-lightbox-pop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fwe-lightbox-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.fwe-lightbox__header {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  background: rgb(12 12 18 / 65%);
+}
+
+.fwe-lightbox__counter {
+  color: rgb(255 255 255 / 75%);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+}
+
+.fwe-lightbox__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fwe-lightbox__btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(255 255 255 / 10%);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.fwe-lightbox__btn:hover,
+.fwe-lightbox__btn:focus-visible {
+  border-color: rgb(255 255 255 / 35%);
+  background: rgb(255 255 255 / 22%);
+  transform: scale(1.06);
+  outline: none;
+}
+
+.fwe-lightbox__btn--close:hover {
+  border-color: #ff3ba4;
+  background: #d60072;
+}
+
+.fwe-lightbox__body {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.fwe-lightbox__nav {
+  position: absolute;
+  top: 50%;
+  z-index: 10;
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(15 15 22 / 70%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.fwe-lightbox__nav--prev {
+  left: 1rem;
+}
+
+.fwe-lightbox__nav--next {
+  right: 1rem;
+}
+
+.fwe-lightbox__nav:hover,
+.fwe-lightbox__nav:focus-visible {
+  border-color: rgb(255 255 255 / 45%);
+  background: rgb(255 255 255 / 25%);
+  transform: translateY(-50%) scale(1.08);
+  outline: none;
+}
+
+.fwe-lightbox__stage {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.fwe-lightbox__image {
+  display: block;
+  max-width: 100%;
+  max-height: calc(92dvh - 6rem);
+  border-radius: 6px;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 55%);
+  object-fit: contain;
+  transition: opacity 0.18s ease;
+}
+
+.fwe-lightbox__video {
+  display: block;
+  max-width: 100%;
+  max-height: calc(92dvh - 6rem);
+  border-radius: 6px;
+}
+
+.fwe-lightbox__spinner {
+  position: absolute;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid rgb(255 255 255 / 15%);
+  border-radius: 50%;
+  border-top-color: #ff168d;
+  animation: fwe-spinner-rotate 0.75s linear infinite;
+}
+
+@keyframes fwe-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+html[data-fwe-mode='original'] .fwe-lightbox-dialog {
+  display: none !important;
+}
+
 .fwe-popular-dialog[open],
 .fwe-browse-dialog[open] {
   display: flex;
@@ -905,12 +1124,22 @@ html[data-fwe-mode='enhanced'] .fwe-media__source {
 }
 
 html[data-fwe-mode='enhanced'] .fwe-media__item {
+  position: relative;
   display: block;
   min-width: 0;
   overflow: hidden;
-  border-radius: 2px;
+  border-radius: 3px;
   background: #dedad4;
   aspect-ratio: 16 / 9;
+  cursor: zoom-in;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-media__item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgb(0 0 0 / 22%);
 }
 
 html[data-fwe-mode='enhanced'] .entry-content .fwe-media__item img,

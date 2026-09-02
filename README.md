@@ -10,6 +10,7 @@ FitGirl Web Enhanced 是面向 `fitgirl-repacks.site` 的渐进增强 Userscript
 
 - 浏览页在宽屏使用双列编辑式卡片；中小屏自动单列，避免右侧大面积空白。
 - 列表卡片与详情页的 Screenshots & Gameplay 默认展开展示全部截图与试玩视频，并可在 View 菜单中随时切换默认折叠/展开。
+- 点击或悬停截图直接呼出 2026 现代磨砂玻璃（Glassmorphism）大图预览器，支持多图无缝左右翻页（键盘 ←/→）、智能高清原图解析与 Esc/遮罩快捷关闭，避免慢速外链跳转。
 - Direct Links 与 Torrent 合并为一个 `Download Mirrors` disclosure；`Repack Features` 和 `Game Description` 默认关闭。
 - `Most Popular Repacks of the Week` 改为桌面右侧抽屉、移动端底部 Sheet，不再常驻占位。
 - `Upcoming Repacks` 桌面为可横向浏览的紧凑信息带，移动端可折叠且不截断条目，支持条目快速点击搜索。

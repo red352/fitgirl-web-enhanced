@@ -46,6 +46,21 @@ describe('增强界面生命周期', () => {
     ).toHaveLength(5);
     expect(document.querySelectorAll('.fwe-archive-year')).toHaveLength(2);
 
+    const firstMediaItem = document.querySelector<HTMLAnchorElement>('.fwe-media__item');
+    const lightboxDialog = document.querySelector<HTMLDialogElement>('.fwe-lightbox-dialog');
+    expect(lightboxDialog).not.toBeNull();
+    firstMediaItem?.click();
+    expect(lightboxDialog?.hasAttribute('open')).toBe(true);
+    expect(document.querySelector('.fwe-lightbox__counter')?.textContent).toBe('1 / 4');
+
+    const nextBtn = document.querySelector<HTMLButtonElement>('.fwe-lightbox__nav--next');
+    nextBtn?.click();
+    expect(document.querySelector('.fwe-lightbox__counter')?.textContent).toBe('2 / 4');
+
+    const closeBtn = document.querySelector<HTMLButtonElement>('.fwe-lightbox__btn--close');
+    closeBtn?.click();
+    expect(lightboxDialog?.hasAttribute('open')).toBe(false);
+
     const mutation = document.createComment('mutation');
     content.append(mutation);
     await Promise.resolve();

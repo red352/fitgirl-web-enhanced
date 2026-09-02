@@ -21,6 +21,7 @@ import type {
   ArchiveGroup,
   ArticleSection,
   LayoutMode,
+  LightboxMedia,
   NavigationItem,
   ParsedArticle,
   PopularItem,
@@ -155,10 +156,267 @@ function createSummaryPanel(article: ParsedArticle): HTMLElement {
   return panel;
 }
 
+export class ImageLightbox {
+  private readonly dialog: HTMLDialogElement;
+  private readonly counter: HTMLElement;
+  private readonly image: HTMLImageElement;
+  private readonly video: HTMLVideoElement;
+  private readonly spinner: HTMLElement;
+  private readonly prevBtn: HTMLButtonElement;
+  private readonly nextBtn: HTMLButtonElement;
+  private readonly externalBtn: HTMLAnchorElement;
+  private items: LightboxMedia[] = [];
+  private currentIndex = 0;
+  private triggerElement: HTMLElement | null = null;
+  private openedByHover = false;
+  private hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  private closeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    this.dialog = element('dialog', 'fwe-lightbox-dialog');
+    this.dialog.setAttribute('aria-label', '截图与实机预览');
+
+    const wrapper = element('div', 'fwe-lightbox');
+
+    const header = element('header', 'fwe-lightbox__header');
+    this.counter = element('span', 'fwe-lightbox__counter', '1 / 1');
+    const actions = element('div', 'fwe-lightbox__actions');
+
+    this.externalBtn = element('a', 'fwe-lightbox__btn');
+    this.externalBtn.target = '_blank';
+    this.externalBtn.rel = 'noopener noreferrer';
+    this.externalBtn.title = '在新标签页打开原图网站';
+    this.externalBtn.setAttribute('aria-label', '在新标签页打开原图网站');
+    this.externalBtn.append(createIcon('external'));
+
+    const closeBtn = element('button', 'fwe-lightbox__btn fwe-lightbox__btn--close');
+    closeBtn.type = 'button';
+    closeBtn.title = '关闭预览 (Esc)';
+    closeBtn.setAttribute('aria-label', '关闭预览');
+    closeBtn.append(createIcon('close'));
+    closeBtn.addEventListener('click', () => this.close());
+
+    actions.append(this.externalBtn, closeBtn);
+    header.append(this.counter, actions);
+
+    const body = element('div', 'fwe-lightbox__body');
+
+    this.prevBtn = element('button', 'fwe-lightbox__nav fwe-lightbox__nav--prev');
+    this.prevBtn.type = 'button';
+    this.prevBtn.title = '上一张 (←)';
+    this.prevBtn.setAttribute('aria-label', '上一张');
+    this.prevBtn.append(createIcon('chevronLeft'));
+    this.prevBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.prev();
+    });
+
+    this.nextBtn = element('button', 'fwe-lightbox__nav fwe-lightbox__nav--next');
+    this.nextBtn.type = 'button';
+    this.nextBtn.title = '下一张 (→)';
+    this.nextBtn.setAttribute('aria-label', '下一张');
+    this.nextBtn.append(createIcon('chevronRight'));
+    this.nextBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.next();
+    });
+
+    const stage = element('div', 'fwe-lightbox__stage');
+    this.spinner = element('div', 'fwe-lightbox__spinner');
+    this.image = element('img', 'fwe-lightbox__image');
+    this.video = element('video', 'fwe-lightbox__video');
+    this.video.controls = true;
+    this.video.playsInline = true;
+
+    stage.append(this.spinner, this.image, this.video);
+    body.append(this.prevBtn, stage, this.nextBtn);
+
+    wrapper.append(header, body);
+    this.dialog.append(wrapper);
+
+    this.dialog.addEventListener('click', (event) => {
+      if (event.target === this.dialog) {
+        this.close();
+      }
+    });
+
+    this.dialog.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        this.prev();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        this.next();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        this.close();
+      }
+    });
+
+    this.dialog.addEventListener('pointerenter', () => {
+      if (this.closeTimer !== null) {
+        clearTimeout(this.closeTimer);
+        this.closeTimer = null;
+      }
+    });
+
+    this.dialog.addEventListener('pointerleave', (event) => {
+      if (this.openedByHover && event.pointerType === 'mouse') {
+        this.closeTimer = setTimeout(() => this.close(), 300);
+      }
+    });
+
+    document.body.append(this.dialog);
+  }
+
+  public open(
+    items: LightboxMedia[],
+    initialIndex: number,
+    triggerElement?: HTMLElement,
+    openedByHover = false,
+  ): void {
+    if (items.length === 0) return;
+    this.items = items;
+    this.currentIndex = Math.max(0, Math.min(initialIndex, items.length - 1));
+    this.triggerElement = triggerElement ?? null;
+    this.openedByHover = openedByHover;
+
+    this.render();
+
+    if (!this.dialog.open) {
+      if (typeof this.dialog.showModal === 'function') {
+        this.dialog.showModal();
+      } else {
+        this.dialog.setAttribute('open', '');
+      }
+    }
+  }
+
+  public close(): void {
+    if (this.hoverTimer !== null) {
+      clearTimeout(this.hoverTimer);
+      this.hoverTimer = null;
+    }
+    if (this.closeTimer !== null) {
+      clearTimeout(this.closeTimer);
+      this.closeTimer = null;
+    }
+    if (this.dialog.open || this.dialog.hasAttribute('open')) {
+      this.video.pause();
+      this.video.src = '';
+      if (typeof this.dialog.close === 'function') {
+        this.dialog.close();
+      } else {
+        this.dialog.removeAttribute('open');
+      }
+      if (!this.openedByHover && this.triggerElement) {
+        this.triggerElement.focus();
+      }
+    }
+  }
+
+  public next(): void {
+    if (this.items.length <= 1) return;
+    this.currentIndex = (this.currentIndex + 1) % this.items.length;
+    this.render();
+  }
+
+  public prev(): void {
+    if (this.items.length <= 1) return;
+    this.currentIndex = (this.currentIndex - 1 + this.items.length) % this.items.length;
+    this.render();
+  }
+
+  private render(): void {
+    const current = this.items[this.currentIndex];
+    if (!current) return;
+
+    this.counter.textContent = `${this.currentIndex + 1} / ${this.items.length}`;
+    this.prevBtn.style.display = this.items.length > 1 ? 'inline-flex' : 'none';
+    this.nextBtn.style.display = this.items.length > 1 ? 'inline-flex' : 'none';
+
+    if (current.externalUrl) {
+      this.externalBtn.href = current.externalUrl;
+      this.externalBtn.style.display = 'inline-flex';
+    } else {
+      this.externalBtn.style.display = 'none';
+    }
+
+    if (current.type === 'video') {
+      this.image.style.display = 'none';
+      this.spinner.style.display = 'none';
+      this.video.style.display = 'block';
+      this.video.src = current.src;
+    } else {
+      this.video.pause();
+      this.video.style.display = 'none';
+      this.image.style.display = 'block';
+      this.image.style.opacity = '0';
+      this.spinner.style.display = 'block';
+
+      const targetSrc = current.hdSrc || current.src;
+      const img = new Image();
+      img.src = targetSrc;
+      img.onload = () => {
+        if (this.items[this.currentIndex] === current) {
+          this.image.src = targetSrc;
+          this.image.alt = current.alt;
+          this.image.style.opacity = '1';
+          this.spinner.style.display = 'none';
+        }
+      };
+      img.onerror = () => {
+        if (current.hdSrc && current.src !== current.hdSrc) {
+          this.image.src = current.src;
+          this.image.alt = current.alt;
+          this.image.style.opacity = '1';
+          this.spinner.style.display = 'none';
+        }
+      };
+    }
+  }
+
+  public bindTrigger(anchor: HTMLAnchorElement, items: LightboxMedia[], index: number): void {
+    anchor.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (this.hoverTimer !== null) {
+        clearTimeout(this.hoverTimer);
+        this.hoverTimer = null;
+      }
+      this.open(items, index, anchor, false);
+    });
+
+    anchor.addEventListener('pointerenter', (event) => {
+      if (event.pointerType !== 'mouse') return;
+      if (this.closeTimer !== null) {
+        clearTimeout(this.closeTimer);
+        this.closeTimer = null;
+      }
+      this.hoverTimer = setTimeout(() => {
+        this.open(items, index, anchor, true);
+      }, 220);
+    });
+
+    anchor.addEventListener('pointerleave', (event) => {
+      if (event.pointerType !== 'mouse') return;
+      if (this.hoverTimer !== null) {
+        clearTimeout(this.hoverTimer);
+        this.hoverTimer = null;
+      }
+      if ((this.dialog.open || this.dialog.hasAttribute('open')) && this.openedByHover) {
+        this.closeTimer = setTimeout(() => {
+          this.close();
+        }, 300);
+      }
+    });
+  }
+}
+
 function prepareMedia(
   article: ParsedArticle,
   transaction: DomTransaction,
   mediaExpanded: boolean = true,
+  lightbox?: ImageLightbox,
 ): HTMLDetailsElement | null {
   const screenshots = article.sections.get('screenshots');
   if (!screenshots || article.media.length === 0) return null;
@@ -181,6 +439,18 @@ function prepareMedia(
     ...article.media.filter((item) => item.image),
     ...article.media.filter((item) => item.video),
   ];
+  const lightboxMedia: LightboxMedia[] = ordered.map((item) => {
+    const imgSrc = item.image?.currentSrc || item.image?.src || '';
+    const hdSrc = imgSrc.includes('.240p.jpg') ? imgSrc.replace(/\.240p\.jpg$/, '') : undefined;
+    return {
+      type: item.video ? 'video' : 'image',
+      src: item.video?.src || imgSrc,
+      hdSrc,
+      externalUrl: item.element.href || undefined,
+      alt: item.image?.alt || article.title || 'Screenshot preview',
+    };
+  });
+
   ordered.forEach((item, index) => {
     transaction.move(item.element, gallery);
     transaction.addClass(item.element, 'fwe-media__item');
@@ -198,6 +468,9 @@ function prepareMedia(
       transaction.setAttribute(item.video, 'preload', 'metadata');
       transaction.setAttribute(item.video, 'playsinline', '');
       transaction.addClass(item.video, 'fwe-observed-video');
+    }
+    if (lightbox) {
+      lightbox.bindTrigger(item.element, lightboxMedia, index);
     }
   });
   return media;
@@ -227,6 +500,7 @@ function transformGame(
   article: ParsedArticle,
   transaction: DomTransaction,
   mediaExpanded: boolean = true,
+  lightbox?: ImageLightbox,
 ): void {
   if (!article.entry || article.root.hasAttribute('data-fwe-ready')) return;
   transaction.setAttribute(article.root, 'data-fwe-ready', 'true');
@@ -245,7 +519,7 @@ function transformGame(
 
   const layout = element('div', 'fwe-game-layout');
   layout.append(createSummaryPanel(article));
-  const media = prepareMedia(article, transaction, mediaExpanded);
+  const media = prepareMedia(article, transaction, mediaExpanded, lightbox);
   if (media) layout.append(media);
   transaction.insert(layout, article.entry, article.entry.firstChild);
 
@@ -515,12 +789,14 @@ export class FitGirlEnhancedApp {
   private readonly popularDialog: HTMLDialogElement;
   private readonly browseDialog: HTMLDialogElement;
   private readonly searchForm: HTMLFormElement;
+  private readonly lightbox: ImageLightbox;
   private readonly hasPopularItems: boolean;
   private lastDialogTrigger: HTMLElement | null = null;
 
   constructor() {
     this.mode = getFastStoredLayoutMode();
     this.mediaExpanded = getFastStoredMediaExpand();
+    this.lightbox = new ImageLightbox();
 
     const popularItems = parsePopularItems(document.querySelector('#block-2'));
     this.hasPopularItems = popularItems.length > 0;
@@ -671,6 +947,7 @@ export class FitGirlEnhancedApp {
   }
 
   private disableEnhanced(): void {
+    this.lightbox.close();
     this.observer?.disconnect();
     this.observer = null;
     this.videoObserver?.disconnect();
@@ -705,7 +982,8 @@ export class FitGirlEnhancedApp {
     for (const root of articles) {
       if (root.hasAttribute('data-fwe-ready')) continue;
       const article = parseArticle(root, pageKind);
-      if (article.kind === 'game') transformGame(article, this.transaction, this.mediaExpanded);
+      if (article.kind === 'game')
+        transformGame(article, this.transaction, this.mediaExpanded, this.lightbox);
       else if (article.kind === 'upcoming') transformUpcoming(article, this.transaction);
       else transformSpecial(article, this.transaction);
     }

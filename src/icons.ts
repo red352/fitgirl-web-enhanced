@@ -8,6 +8,10 @@ const paths: Record<string, string> = {
     '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
   description: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6M9 18h4M15 3v4h4"/>',
   chevron: '<path d="m8 10 4 4 4-4"/>',
+  chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
+  external:
+    '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   calendar: '<path d="M5 4h14v16H5zM8 2v4m8-4v4M5 9h14"/>',
