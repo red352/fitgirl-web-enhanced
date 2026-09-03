@@ -12,6 +12,11 @@ const paths: Record<string, string> = {
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   external:
     '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
+  zoomIn:
+    '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>',
+  zoomOut:
+    '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/>',
+  zoomReset: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   calendar: '<path d="M5 4h14v16H5zM8 2v4m8-4v4M5 9h14"/>',

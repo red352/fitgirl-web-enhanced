@@ -19,6 +19,7 @@ import {
 } from './preferences';
 import type {
   ArchiveGroup,
+  ArticleKind,
   ArticleSection,
   LayoutMode,
   LightboxMedia,
@@ -156,21 +157,76 @@ function createSummaryPanel(article: ParsedArticle): HTMLElement {
   return panel;
 }
 
+function resolveMediaSource(item: {
+  element: HTMLAnchorElement;
+  image: HTMLImageElement | null;
+  video: HTMLVideoElement | null;
+}): { type: 'image' | 'video'; src: string; hdSrc?: string } {
+  if (item.video) {
+    const sourceEl = item.video.querySelector<HTMLSourceElement>('source');
+    const sourceSrc = sourceEl?.src || sourceEl?.getAttribute('src') || '';
+    const videoSrc =
+      item.video.src || item.video.currentSrc || item.video.getAttribute('src') || '';
+    const anchorHref = /\.(mp4|webm|ogg|gif)(\?.*)?$/i.test(item.element.href)
+      ? item.element.href
+      : '';
+    const finalVideoSrc = sourceSrc || videoSrc || anchorHref;
+    if (finalVideoSrc) {
+      return { type: 'video', src: finalVideoSrc };
+    }
+  }
+
+  // 检查是否为带有动态图或直接指向图片/视频文件的 anchor
+  if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(item.element.href)) {
+    return { type: 'video', src: item.element.href };
+  }
+
+  const rawImgSrc =
+    item.image?.currentSrc || item.image?.src || item.image?.getAttribute('src') || '';
+  let src = rawImgSrc;
+  let hdSrc: string | undefined;
+
+  // 自动将 http 协议升级为 https，避免跨协议阻塞
+  if (src.startsWith('http://')) {
+    src = src.replace(/^http:\/\//i, 'https://');
+  }
+
+  if (src.includes('.240p.jpg')) {
+    hdSrc = src.replace(/\.240p\.jpg$/, '');
+  } else if (/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(item.element.href)) {
+    let directHref = item.element.href;
+    if (directHref.startsWith('http://'))
+      directHref = directHref.replace(/^http:\/\//i, 'https://');
+    if (directHref !== src) {
+      hdSrc = directHref;
+    }
+  }
+
+  return { type: 'image', src, hdSrc };
+}
+
 export class ImageLightbox {
   private readonly dialog: HTMLDialogElement;
   private readonly counter: HTMLElement;
+  private readonly hdBadge: HTMLElement;
+  private readonly zoomLevelText: HTMLButtonElement;
   private readonly image: HTMLImageElement;
   private readonly video: HTMLVideoElement;
   private readonly spinner: HTMLElement;
   private readonly prevBtn: HTMLButtonElement;
   private readonly nextBtn: HTMLButtonElement;
   private readonly externalBtn: HTMLAnchorElement;
+  private readonly stage: HTMLElement;
   private items: LightboxMedia[] = [];
   private currentIndex = 0;
   private triggerElement: HTMLElement | null = null;
-  private openedByHover = false;
-  private hoverTimer: ReturnType<typeof setTimeout> | null = null;
-  private closeTimer: ReturnType<typeof setTimeout> | null = null;
+  private preloadedHd = new Set<string>();
+  private scale = 1;
+  private translateX = 0;
+  private translateY = 0;
+  private isDragging = false;
+  private startX = 0;
+  private startY = 0;
 
   constructor() {
     this.dialog = element('dialog', 'fwe-lightbox-dialog');
@@ -179,7 +235,42 @@ export class ImageLightbox {
     const wrapper = element('div', 'fwe-lightbox');
 
     const header = element('header', 'fwe-lightbox__header');
+    const metaGroup = element('div', 'fwe-lightbox__meta');
     this.counter = element('span', 'fwe-lightbox__counter', '1 / 1');
+    this.hdBadge = element('span', 'fwe-lightbox__hd-badge', 'HD');
+    metaGroup.append(this.counter, this.hdBadge);
+
+    const toolbar = element('div', 'fwe-lightbox__toolbar');
+
+    const zoomOutBtn = element('button', 'fwe-lightbox__btn');
+    zoomOutBtn.type = 'button';
+    zoomOutBtn.title = '缩小 (Ctrl -)';
+    zoomOutBtn.setAttribute('aria-label', '缩小');
+    zoomOutBtn.append(createIcon('zoomOut'));
+    zoomOutBtn.addEventListener('click', () => this.applyZoom(this.scale * 0.8));
+
+    this.zoomLevelText = element('button', 'fwe-lightbox__zoom-indicator', '100%');
+    this.zoomLevelText.type = 'button';
+    this.zoomLevelText.title = '重置缩放 (Ctrl 0)';
+    this.zoomLevelText.setAttribute('aria-label', '重置缩放');
+    this.zoomLevelText.addEventListener('click', () => this.resetZoom());
+
+    const zoomInBtn = element('button', 'fwe-lightbox__btn');
+    zoomInBtn.type = 'button';
+    zoomInBtn.title = '放大 (Ctrl +)';
+    zoomInBtn.setAttribute('aria-label', '放大');
+    zoomInBtn.append(createIcon('zoomIn'));
+    zoomInBtn.addEventListener('click', () => this.applyZoom(this.scale * 1.25));
+
+    const resetBtn = element('button', 'fwe-lightbox__btn');
+    resetBtn.type = 'button';
+    resetBtn.title = '自适应重置';
+    resetBtn.setAttribute('aria-label', '自适应重置');
+    resetBtn.append(createIcon('zoomReset'));
+    resetBtn.addEventListener('click', () => this.resetZoom());
+
+    toolbar.append(zoomOutBtn, this.zoomLevelText, zoomInBtn, resetBtn);
+
     const actions = element('div', 'fwe-lightbox__actions');
 
     this.externalBtn = element('a', 'fwe-lightbox__btn');
@@ -197,7 +288,7 @@ export class ImageLightbox {
     closeBtn.addEventListener('click', () => this.close());
 
     actions.append(this.externalBtn, closeBtn);
-    header.append(this.counter, actions);
+    header.append(metaGroup, toolbar, actions);
 
     const body = element('div', 'fwe-lightbox__body');
 
@@ -221,18 +312,22 @@ export class ImageLightbox {
       this.next();
     });
 
-    const stage = element('div', 'fwe-lightbox__stage');
+    this.stage = element('div', 'fwe-lightbox__stage');
     this.spinner = element('div', 'fwe-lightbox__spinner');
     this.image = element('img', 'fwe-lightbox__image');
     this.video = element('video', 'fwe-lightbox__video');
     this.video.controls = true;
     this.video.playsInline = true;
+    this.video.autoplay = true;
+    this.video.loop = true;
 
-    stage.append(this.spinner, this.image, this.video);
-    body.append(this.prevBtn, stage, this.nextBtn);
+    this.stage.append(this.spinner, this.image, this.video);
+    body.append(this.prevBtn, this.stage, this.nextBtn);
 
     wrapper.append(header, body);
     this.dialog.append(wrapper);
+
+    this.bindZoomAndDrag(this.stage);
 
     this.dialog.addEventListener('click', (event) => {
       if (event.target === this.dialog) {
@@ -250,36 +345,116 @@ export class ImageLightbox {
       } else if (event.key === 'Escape') {
         event.preventDefault();
         this.close();
-      }
-    });
-
-    this.dialog.addEventListener('pointerenter', () => {
-      if (this.closeTimer !== null) {
-        clearTimeout(this.closeTimer);
-        this.closeTimer = null;
-      }
-    });
-
-    this.dialog.addEventListener('pointerleave', (event) => {
-      if (this.openedByHover && event.pointerType === 'mouse') {
-        this.closeTimer = setTimeout(() => this.close(), 300);
+      } else if (event.key === '+' || event.key === '=' || (event.ctrlKey && event.key === '=')) {
+        event.preventDefault();
+        this.applyZoom(this.scale * 1.25);
+      } else if (event.key === '-' || (event.ctrlKey && event.key === '-')) {
+        event.preventDefault();
+        this.applyZoom(this.scale * 0.8);
+      } else if (event.key === '0' || (event.ctrlKey && event.key === '0')) {
+        event.preventDefault();
+        this.resetZoom();
       }
     });
 
     document.body.append(this.dialog);
   }
 
-  public open(
-    items: LightboxMedia[],
-    initialIndex: number,
-    triggerElement?: HTMLElement,
-    openedByHover = false,
-  ): void {
+  private bindZoomAndDrag(stage: HTMLElement): void {
+    stage.addEventListener(
+      'wheel',
+      (event: WheelEvent) => {
+        event.preventDefault();
+        const factor = event.deltaY < 0 ? 1.16 : 0.86;
+        const rect = stage.getBoundingClientRect();
+        const focalX = event.clientX - (rect.left + rect.width / 2);
+        const focalY = event.clientY - (rect.top + rect.height / 2);
+        this.applyZoom(this.scale * factor, focalX, focalY);
+      },
+      { passive: false },
+    );
+
+    stage.addEventListener('dblclick', (event) => {
+      event.preventDefault();
+      if (this.scale > 1.05) {
+        this.resetZoom();
+      } else {
+        const rect = stage.getBoundingClientRect();
+        const focalX = event.clientX - (rect.left + rect.width / 2);
+        const focalY = event.clientY - (rect.top + rect.height / 2);
+        this.applyZoom(2.2, focalX, focalY);
+      }
+    });
+
+    stage.addEventListener('pointerdown', (event: PointerEvent) => {
+      if (event.button !== 0 || this.scale <= 1) return;
+      this.isDragging = true;
+      this.startX = event.clientX - this.translateX;
+      this.startY = event.clientY - this.translateY;
+      stage.classList.add('is-dragging');
+      stage.setPointerCapture(event.pointerId);
+    });
+
+    stage.addEventListener('pointermove', (event: PointerEvent) => {
+      if (!this.isDragging) return;
+      this.translateX = event.clientX - this.startX;
+      this.translateY = event.clientY - this.startY;
+      this.updateTransform();
+    });
+
+    const endDrag = (event: PointerEvent) => {
+      if (!this.isDragging) return;
+      this.isDragging = false;
+      stage.classList.remove('is-dragging');
+      try {
+        stage.releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore
+      }
+    };
+
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', endDrag);
+  }
+
+  private applyZoom(newScale: number, focalX = 0, focalY = 0): void {
+    const prevScale = this.scale;
+    const clamped = Math.max(0.6, Math.min(newScale, 5.0));
+    this.scale = clamped;
+
+    if (this.scale <= 1) {
+      this.translateX = 0;
+      this.translateY = 0;
+    } else if (prevScale !== this.scale && focalX !== 0 && focalY !== 0) {
+      const ratio = this.scale / prevScale;
+      this.translateX = focalX - (focalX - this.translateX) * ratio;
+      this.translateY = focalY - (focalY - this.translateY) * ratio;
+    }
+
+    this.zoomLevelText.textContent = `${Math.round(this.scale * 100)}%`;
+    this.updateTransform();
+  }
+
+  private resetZoom(): void {
+    this.scale = 1;
+    this.translateX = 0;
+    this.translateY = 0;
+    this.zoomLevelText.textContent = '100%';
+    this.updateTransform();
+  }
+
+  private updateTransform(): void {
+    const target = this.items[this.currentIndex]?.type === 'video' ? this.video : this.image;
+    target.style.transform = `translate3d(${this.translateX}px, ${this.translateY}px, 0) scale(${this.scale})`;
+    target.style.cursor = this.scale > 1 ? (this.isDragging ? 'grabbing' : 'grab') : 'default';
+  }
+
+  public open(items: LightboxMedia[], initialIndex: number, triggerElement?: HTMLElement): void {
     if (items.length === 0) return;
     this.items = items;
     this.currentIndex = Math.max(0, Math.min(initialIndex, items.length - 1));
     this.triggerElement = triggerElement ?? null;
-    this.openedByHover = openedByHover;
+    this.resetZoom();
 
     this.render();
 
@@ -293,23 +468,16 @@ export class ImageLightbox {
   }
 
   public close(): void {
-    if (this.hoverTimer !== null) {
-      clearTimeout(this.hoverTimer);
-      this.hoverTimer = null;
-    }
-    if (this.closeTimer !== null) {
-      clearTimeout(this.closeTimer);
-      this.closeTimer = null;
-    }
     if (this.dialog.open || this.dialog.hasAttribute('open')) {
       this.video.pause();
       this.video.src = '';
+      this.resetZoom();
       if (typeof this.dialog.close === 'function') {
         this.dialog.close();
       } else {
         this.dialog.removeAttribute('open');
       }
-      if (!this.openedByHover && this.triggerElement) {
+      if (this.triggerElement) {
         this.triggerElement.focus();
       }
     }
@@ -317,14 +485,35 @@ export class ImageLightbox {
 
   public next(): void {
     if (this.items.length <= 1) return;
+    this.resetZoom();
     this.currentIndex = (this.currentIndex + 1) % this.items.length;
     this.render();
   }
 
   public prev(): void {
     if (this.items.length <= 1) return;
+    this.resetZoom();
     this.currentIndex = (this.currentIndex - 1 + this.items.length) % this.items.length;
     this.render();
+  }
+
+  private updateHdBadge(state: 'loading' | 'ready' | 'video' | 'none'): void {
+    this.hdBadge.className = 'fwe-lightbox__hd-badge';
+    if (state === 'none') {
+      this.hdBadge.style.display = 'none';
+      return;
+    }
+    this.hdBadge.style.display = 'inline-flex';
+    if (state === 'video') {
+      this.hdBadge.classList.add('fwe-lightbox__hd-badge--video');
+      this.hdBadge.textContent = 'VIDEO';
+    } else if (state === 'loading') {
+      this.hdBadge.classList.add('fwe-lightbox__hd-badge--loading');
+      this.hdBadge.textContent = 'HD...';
+    } else if (state === 'ready') {
+      this.hdBadge.classList.add('fwe-lightbox__hd-badge--ready');
+      this.hdBadge.textContent = 'HD';
+    }
   }
 
   private render(): void {
@@ -346,68 +535,52 @@ export class ImageLightbox {
       this.image.style.display = 'none';
       this.spinner.style.display = 'none';
       this.video.style.display = 'block';
-      this.video.src = current.src;
+      this.updateHdBadge('video');
+      if (this.video.src !== current.src) {
+        this.video.src = current.src;
+        this.video.load();
+      }
+      void this.video.play().catch(() => undefined);
     } else {
       this.video.pause();
       this.video.style.display = 'none';
       this.image.style.display = 'block';
-      this.image.style.opacity = '0';
-      this.spinner.style.display = 'block';
+      this.spinner.style.display = 'none';
+      this.image.alt = current.alt;
 
-      const targetSrc = current.hdSrc || current.src;
-      const img = new Image();
-      img.src = targetSrc;
-      img.onload = () => {
-        if (this.items[this.currentIndex] === current) {
-          this.image.src = targetSrc;
-          this.image.alt = current.alt;
-          this.image.style.opacity = '1';
-          this.spinner.style.display = 'none';
-        }
-      };
-      img.onerror = () => {
-        if (current.hdSrc && current.src !== current.hdSrc) {
-          this.image.src = current.src;
-          this.image.alt = current.alt;
-          this.image.style.opacity = '1';
-          this.spinner.style.display = 'none';
-        }
-      };
+      const hd = current.hdSrc;
+      if (hd && this.preloadedHd.has(hd)) {
+        this.image.src = hd;
+        this.updateHdBadge('ready');
+      } else if (hd) {
+        this.image.src = current.src;
+        this.updateHdBadge('loading');
+        const hdImage = new Image();
+        hdImage.src = hd;
+        hdImage.onload = () => {
+          this.preloadedHd.add(hd);
+          if (this.items[this.currentIndex] === current && this.dialog.open) {
+            this.image.src = hd;
+            this.updateHdBadge('ready');
+          }
+        };
+        hdImage.onerror = () => {
+          if (this.items[this.currentIndex] === current && this.dialog.open) {
+            this.updateHdBadge('none');
+          }
+        };
+      } else {
+        this.image.src = current.src;
+        this.updateHdBadge('ready');
+      }
+      this.image.style.opacity = '1';
     }
   }
 
   public bindTrigger(anchor: HTMLAnchorElement, items: LightboxMedia[], index: number): void {
     anchor.addEventListener('click', (event) => {
       event.preventDefault();
-      if (this.hoverTimer !== null) {
-        clearTimeout(this.hoverTimer);
-        this.hoverTimer = null;
-      }
-      this.open(items, index, anchor, false);
-    });
-
-    anchor.addEventListener('pointerenter', (event) => {
-      if (event.pointerType !== 'mouse') return;
-      if (this.closeTimer !== null) {
-        clearTimeout(this.closeTimer);
-        this.closeTimer = null;
-      }
-      this.hoverTimer = setTimeout(() => {
-        this.open(items, index, anchor, true);
-      }, 220);
-    });
-
-    anchor.addEventListener('pointerleave', (event) => {
-      if (event.pointerType !== 'mouse') return;
-      if (this.hoverTimer !== null) {
-        clearTimeout(this.hoverTimer);
-        this.hoverTimer = null;
-      }
-      if ((this.dialog.open || this.dialog.hasAttribute('open')) && this.openedByHover) {
-        this.closeTimer = setTimeout(() => {
-          this.close();
-        }, 300);
-      }
+      this.open(items, index, anchor);
     });
   }
 }
@@ -440,12 +613,11 @@ function prepareMedia(
     ...article.media.filter((item) => item.video),
   ];
   const lightboxMedia: LightboxMedia[] = ordered.map((item) => {
-    const imgSrc = item.image?.currentSrc || item.image?.src || '';
-    const hdSrc = imgSrc.includes('.240p.jpg') ? imgSrc.replace(/\.240p\.jpg$/, '') : undefined;
+    const resolved = resolveMediaSource(item);
     return {
-      type: item.video ? 'video' : 'image',
-      src: item.video?.src || imgSrc,
-      hdSrc,
+      type: resolved.type,
+      src: resolved.src,
+      hdSrc: resolved.hdSrc,
       externalUrl: item.element.href || undefined,
       alt: item.image?.alt || article.title || 'Screenshot preview',
     };
@@ -882,10 +1054,14 @@ export class FitGirlEnhancedApp {
       readStoredLayoutMode(),
       readStoredMediaExpand(),
     ]);
-    this.mode = mode;
-    this.mediaExpanded = mediaExpanded;
-    this.applyMode(this.mode);
-    this.applyMediaExpand(this.mediaExpanded);
+    if (this.mode !== mode) {
+      this.mode = mode;
+      this.applyMode(this.mode);
+    }
+    if (this.mediaExpanded !== mediaExpanded) {
+      this.mediaExpanded = mediaExpanded;
+      this.applyMediaExpand(this.mediaExpanded);
+    }
   }
 
   private mountControls(): void {
@@ -975,29 +1151,140 @@ export class FitGirlEnhancedApp {
   private processArticles(): void {
     if (!this.transaction || this.processing) return;
     this.processing = true;
-    const pageKind = detectPageKind();
-    const articles = document.querySelectorAll<HTMLElement>(
-      '#content article.hentry, article.hentry',
-    );
-    for (const root of articles) {
-      if (root.hasAttribute('data-fwe-ready')) continue;
-      const article = parseArticle(root, pageKind);
-      if (article.kind === 'game')
-        transformGame(article, this.transaction, this.mediaExpanded, this.lightbox);
-      else if (article.kind === 'upcoming') transformUpcoming(article, this.transaction);
-      else transformSpecial(article, this.transaction);
+
+    // 暂停 Observer 避免自身 DOM 重组触发无限循环
+    const activeObserver = this.observer;
+    if (activeObserver) {
+      activeObserver.disconnect();
+      this.observer = null;
     }
+
+    const pageKind = detectPageKind();
+    const isSingle =
+      pageKind === 'single' ||
+      document.body.matches('.single, .single-post, .page, .singular') ||
+      Boolean(document.querySelector('.single-post, .singular'));
+
+    const content = document.querySelector<HTMLElement>('#content');
+    const articles = [
+      ...document.querySelectorAll<HTMLElement>('#content article.hentry, article.hentry'),
+    ];
+
+    let upcomingArticle: HTMLElement | null = null;
+    const cardsToLayout: HTMLElement[] = [];
+
+    for (const root of articles) {
+      const isTransformed = root.hasAttribute('data-fwe-ready');
+      let kind: ArticleKind = 'special';
+      if (!isTransformed) {
+        const article = parseArticle(root, pageKind);
+        kind = article.kind;
+        if (article.kind === 'game') {
+          transformGame(article, this.transaction, this.mediaExpanded, this.lightbox);
+        } else if (article.kind === 'upcoming') {
+          transformUpcoming(article, this.transaction);
+        } else {
+          transformSpecial(article, this.transaction);
+        }
+      } else if (root.matches('.fwe-upcoming')) {
+        kind = 'upcoming';
+      } else if (root.matches('.fwe-game-card')) {
+        kind = 'game';
+      }
+
+      if (kind === 'upcoming' || root.matches('.fwe-upcoming')) {
+        upcomingArticle = root;
+      } else if (
+        !isSingle &&
+        !root.matches('.fwe-directory-popular, .fwe-directory-az, .fwe-directory-updates')
+      ) {
+        cardsToLayout.push(root);
+      }
+    }
+
+    if (!isSingle && content) {
+      // 隐藏 content 下所有非文章非导航的游离杂项，彻底解决排版空白抢占
+      [...content.children].forEach((child) => {
+        if (
+          child instanceof HTMLElement &&
+          !child.matches(
+            'article, .fwe-stream, .page-header, .navigation, .paging-navigation, .post-navigation',
+          )
+        ) {
+          this.transaction?.addClass(child, 'fwe-source-hidden');
+        }
+      });
+
+      const pageHeader = content.querySelector<HTMLElement>(':scope > .page-header');
+
+      // 确保 Upcoming Repacks 位于内容区最顶部（或紧随 page-header 之后）
+      if (upcomingArticle) {
+        const expectedAnchor = pageHeader ? pageHeader.nextSibling : content.firstChild;
+        if (
+          upcomingArticle.parentElement !== content ||
+          upcomingArticle.previousElementSibling !== pageHeader
+        ) {
+          this.transaction.move(upcomingArticle, content, expectedAnchor);
+        }
+      }
+
+      // 获取或创建双列瀑布流容器
+      let stream = content.querySelector<HTMLElement>(':scope > .fwe-stream');
+      let streamColLeft: HTMLElement | null = null;
+      let streamColRight: HTMLElement | null = null;
+
+      const streamAnchor = upcomingArticle
+        ? upcomingArticle.nextSibling
+        : pageHeader
+          ? pageHeader.nextSibling
+          : content.firstChild;
+
+      if (!stream) {
+        stream = element('div', 'fwe-stream');
+        streamColLeft = element('div', 'fwe-stream__col fwe-stream__col--left');
+        streamColRight = element('div', 'fwe-stream__col fwe-stream__col--right');
+        stream.append(streamColLeft, streamColRight);
+        this.transaction.insert(stream, content, streamAnchor);
+      } else {
+        streamColLeft = stream.querySelector<HTMLElement>('.fwe-stream__col--left');
+        streamColRight = stream.querySelector<HTMLElement>('.fwe-stream__col--right');
+        if (stream.previousElementSibling !== (upcomingArticle ?? pageHeader)) {
+          content.insertBefore(stream, streamAnchor);
+        }
+      }
+
+      // 将文章卡片交替分配至左右立柱
+      if (streamColLeft && streamColRight) {
+        cardsToLayout.forEach((card, index) => {
+          const targetCol = index % 2 === 0 ? streamColLeft : streamColRight;
+          if (card.parentElement !== targetCol) {
+            this.transaction?.move(card, targetCol);
+          }
+        });
+      }
+
+      // 确保分页导航位于瀑布流之后
+      const nav = content.querySelector<HTMLElement>(
+        ':scope > .navigation, :scope > .paging-navigation, :scope > .post-navigation',
+      );
+      if (nav && stream && nav.previousElementSibling !== stream) {
+        this.transaction.move(nav, content, stream.nextSibling);
+      }
+    }
+
     this.processing = false;
+    if (this.mode === 'enhanced') {
+      this.observeChanges();
+    }
   }
 
   private observeChanges(): void {
+    if (this.observer) return;
     const target = document.querySelector('#content') ?? document.body;
     this.observer = new MutationObserver(() => {
       if (this.processing || this.mode !== 'enhanced') return;
-      queueMicrotask(() => {
-        this.processArticles();
-        this.observeVideos();
-      });
+      this.processArticles();
+      this.observeVideos();
     });
     this.observer.observe(target, { childList: true, subtree: true });
   }

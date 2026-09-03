@@ -18,7 +18,7 @@ for (const viewport of viewports) {
     );
     expect(overflow).toBeLessThanOrEqual(1);
     const columns = await page
-      .locator('#content')
+      .locator('.fwe-stream')
       .evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(' ').length);
     expect(columns).toBe(viewport.width >= 1152 ? 2 : 1);
   });
@@ -32,7 +32,15 @@ test('Upcoming、卡片和内容容器左右对齐', async ({ page }) => {
   const geometry = await page.evaluate(() => {
     const rect = (selector: string) => {
       const item = document.querySelector(selector)?.getBoundingClientRect();
-      return item ? { left: item.left, right: item.right, width: item.width } : null;
+      return item
+        ? {
+            left: item.left,
+            right: item.right,
+            top: item.top,
+            bottom: item.bottom,
+            width: item.width,
+          }
+        : null;
     };
     return {
       content: rect('#content'),
@@ -43,6 +51,7 @@ test('Upcoming、卡片和内容容器左右对齐', async ({ page }) => {
   expect(geometry.upcoming?.left).toBeCloseTo(geometry.content?.left ?? 0, 0);
   expect(geometry.upcoming?.right).toBeCloseTo(geometry.content?.right ?? 0, 0);
   expect(geometry.card?.left).toBeCloseTo(geometry.content?.left ?? 0, 0);
+  expect(geometry.upcoming?.top).toBeLessThan(geometry.card?.top ?? 0);
 
   const upcomingDetails = page.locator('.fwe-upcoming__details');
   await expect(upcomingDetails).toHaveAttribute('open', '');
@@ -169,21 +178,18 @@ test('Digest、搜索和月度归档保持统一卡片布局', async ({ page }) 
 test('首页两列卡片依次填满，且隐藏内容容器内的非文章杂项元素', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./');
-  const cards = page.locator('#content > article.hentry:not(.fwe-upcoming)');
-  const count = await cards.count();
-  expect(count).toBeGreaterThanOrEqual(2);
-  const rects = await cards.evaluateAll((list) =>
-    list.map((node) => {
-      const rect = node.getBoundingClientRect();
-      return {
-        left: Math.round(rect.left),
-        top: Math.round(rect.top),
-        width: Math.round(rect.width),
-      };
-    }),
-  );
-  expect(rects[0]?.left).toBeLessThan(rects[1]?.left ?? 0);
-  expect(rects[0]?.top).toBeCloseTo(rects[1]?.top ?? 0, 1);
+  const leftFirst = page.locator('.fwe-stream__col--left article.hentry').first();
+  const rightFirst = page.locator('.fwe-stream__col--right article.hentry').first();
+  await expect(leftFirst).toBeVisible();
+  await expect(rightFirst).toBeVisible();
+
+  const leftRect = await leftFirst.boundingBox();
+  const rightRect = await rightFirst.boundingBox();
+  expect(leftRect).not.toBeNull();
+  expect(rightRect).not.toBeNull();
+
+  expect(leftRect?.x).toBeLessThan(rightRect?.x ?? 0);
+  expect(leftRect?.y).toBeCloseTo(rightRect?.y ?? 0, 1);
 });
 
 test('独立页面（popular、a-z、updates）使用单列居中布局且占满内容区', async ({ page }) => {

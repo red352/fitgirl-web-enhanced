@@ -8,17 +8,18 @@ FitGirl Web Enhanced 是面向 `fitgirl-repacks.site` 的渐进增强 Userscript
 
 ## 核心功能
 
-- 浏览页在宽屏使用双列编辑式卡片；中小屏自动单列，避免右侧大面积空白。
-- 列表卡片与详情页的 Screenshots & Gameplay 默认展开展示全部截图与试玩视频，并可在 View 菜单中随时切换默认折叠/展开。
-- 点击或悬停截图直接呼出 2026 现代磨砂玻璃（Glassmorphism）大图预览器，支持多图无缝左右翻页（键盘 ←/→）、智能高清原图解析与 Esc/遮罩快捷关闭，避免慢速外链跳转。
-- Direct Links 与 Torrent 合并为一个 `Download Mirrors` disclosure；`Repack Features` 和 `Game Description` 默认关闭。
-- `Most Popular Repacks of the Week` 改为桌面右侧抽屉、移动端底部 Sheet，不再常驻占位。
-- `Upcoming Repacks` 桌面为可横向浏览的紧凑信息带，移动端可折叠且不截断条目，支持条目快速点击搜索。
-- 搜索结果复用首页卡片并显示完整信息网格；Updates Digest、Popular Repacks、A-Z、Updates List 与月度归档使用统一的响应式视觉系统。
-- 顶部保留桌面 hover 子菜单；Browse 抽屉覆盖全部路由和按年份折叠的 Monthly Archives。
-- 基于 `@run-at: document-start` 与同步 Fast-Path 偏好注入，彻底消除页面首屏未样式化闪现（FOUC）。
-- 原生 `<details>/<summary>`、清晰焦点样式、至少 44px 触控目标、Esc 关闭和焦点归还。
-- View 控制菜单收纳 **Enhanced View** 视图模式与 **Expand Screenshots** 媒体预览开关；Original View 隐藏所有增强按钮并仅显示右下角固定恢复入口，完整恢复原节点顺序、属性及侧栏。
+- **双列自适应瀑布流（Dual-Column Masonry）**：宽屏下卡片按时序交替分配至独立双立柱，纵向紧密吸附贴合，彻底消除卡片展开截图带来的大面积高差留白；中小屏自适应单列。
+- **结构防偏与纯净隔离**：全面隔离 FitGirl/WordPress 原生清除浮动伪元素与分页广告游离节点，杜绝布局右偏与空位抢占；`Upcoming Repacks` 始终稳居页面顶部全宽铺开。
+- **游戏封面原貌展示**：封面海报由 `cover` 调整为 `contain` 适应比例，杜绝边缘标题与细节裁剪。
+- **全屏磨砂玻璃 Lightbox 大图灯箱**：
+  - 点击任何截图或视频缩略图即刻呼出沉浸式灯箱，0ms 首帧秒开并后台静默升级高清原图。
+  - 支持**鼠标滚轮焦点缩放（Focal Zoom）**、**双击放大至 2.2x**、**按住鼠标拖拽平移**与**快捷键（Esc 退出、←/→ 切图、Ctrl +/-/0 缩放）**。
+  - 原生 `<video>` 试玩动图循环播放支持。
+- **折叠收纳与快速镜像**：Direct Links 与 Torrent 合并为 `Download Mirrors` disclosure；`Repack Features` 和 `Game Description` 默认收起。
+- **抽屉式热门榜单与导航**：`Most Popular Repacks of the Week` 改为桌面右侧抽屉、移动端底部 Sheet，不再常驻占位。
+- **分类与目录统一**：搜索结果、Updates Digest、Popular Repacks、A-Z、Updates List 与月度归档使用统一的响应式视觉系统。
+- **首屏无闪现（FOUC 消除）**：基于 `@run-at: document-start` 与同步 Fast-Path 偏好注入，杜绝原版白屏或未样式化闪跳。
+- **无感可逆与状态持久**：View 控制菜单收纳 **Enhanced View** 视图模式与 **Expand Screenshots** 媒体预览开关；Original View 隐藏所有注入控件并提供右下角快速恢复入口，配置即时保存于本地。
 
 ## 实际渲染
 
