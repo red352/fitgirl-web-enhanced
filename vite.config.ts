@@ -12,7 +12,7 @@ export default defineConfig({
       userscript: {
         name: 'FitGirl Web Enhanced',
         namespace: repository,
-        version: '1.3.0',
+        version: '1.4.1',
         description: '优化 FitGirl Repacks 的信息密度、宽屏布局、折叠内容与热门榜单。',
         author: 'red352',
         license: 'MIT',

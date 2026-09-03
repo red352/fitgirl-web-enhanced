@@ -20,7 +20,9 @@ for (const viewport of viewports) {
     const columns = await page
       .locator('.fwe-stream')
       .evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(' ').length);
-    expect(columns).toBe(viewport.width >= 1152 ? 2 : 1);
+    const expectedCols =
+      viewport.width >= 2400 ? 4 : viewport.width >= 1700 ? 3 : viewport.width >= 1152 ? 2 : 1;
+    expect(columns).toBe(expectedCols);
   });
 }
 
@@ -120,6 +122,72 @@ test('详情图库默认展开，移动端单列且图片填充容器', async ({
   expect(dimensions.outer).toBeCloseTo(dimensions.galleryContent ?? 0, 0);
 });
 
+test('详情页模块原生完整展示，且保留直链折叠交互', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('./?page=single');
+  const sections = page.locator('.fwe-detail .fwe-detail-section');
+  await expect(sections).toHaveCount(3);
+
+  // 内部无 max-height 限制
+  const maxHeight = await sections
+    .first()
+    .locator('.fwe-detail-section__content')
+    .evaluate((el) => getComputedStyle(el).maxHeight);
+  expect(maxHeight).toBe('none');
+
+  // 原版“Click to show direct links”折叠形式保留且默认闭合
+  const directLinks = page.locator('.fwe-detail .fwe-direct-links-details');
+  if ((await directLinks.count()) > 0) {
+    await expect(directLinks.first()).not.toHaveAttribute('open');
+    await directLinks.first().locator('.fwe-direct-links-summary').click();
+    await expect(directLinks.first()).toHaveAttribute('open', '');
+  }
+});
+
+test('列表卡片采用底座按钮形式，点击秒开带有Tab的磨砂玻璃Dialog，保留直链折叠', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('./');
+  const card = page.locator('.fwe-game-card').first();
+  const actions = card.locator('.fwe-card-actions');
+  await expect(actions).toBeVisible();
+
+  const downloadBtn = actions.locator('.fwe-card-btn--primary');
+  await expect(downloadBtn).toHaveText(/Download Mirrors/);
+
+  // 点击 Download Mirrors 打开 Dialog
+  await downloadBtn.click();
+  const dialog = page.locator('.fwe-game-dialog');
+  await expect(dialog).toBeVisible();
+
+  // 默认激活 Downloads Tab，且内容严格隔离（仅 Downloads 可见，其他面板绝对隐藏）
+  const activeTab = dialog.locator('.fwe-game-dialog__tab--active');
+  await expect(activeTab).toHaveText(/Download Mirrors/);
+  await expect(dialog.locator('.fwe-game-dialog__pane--downloads')).toBeVisible();
+  await expect(dialog.locator('.fwe-game-dialog__pane--features')).not.toBeVisible();
+  await expect(dialog.locator('.fwe-game-dialog__pane--description')).not.toBeVisible();
+
+  // 检查直链折叠形式保留
+  const directLinks = dialog.locator('.fwe-direct-links-details');
+  if ((await directLinks.count()) > 0) {
+    await expect(directLinks.first()).not.toHaveAttribute('open');
+    await directLinks.first().locator('.fwe-direct-links-summary').click();
+    await expect(directLinks.first()).toHaveAttribute('open', '');
+  }
+
+  // 切换到 Features Tab，内容严格切换（仅 Features 可见，Downloads 变为隐藏）
+  const featuresTab = dialog.locator('.fwe-game-dialog__tab').nth(1);
+  await featuresTab.click();
+  await expect(dialog.locator('.fwe-game-dialog__pane--features')).toBeVisible();
+  await expect(dialog.locator('.fwe-game-dialog__pane--downloads')).not.toBeVisible();
+
+  // 按 Esc 关闭弹窗，焦点归还
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(downloadBtn).toBeFocused();
+});
+
 test('顶部保留桌面悬浮子菜单，Browse 提供完整路由和归档', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./');
@@ -175,21 +243,22 @@ test('Digest、搜索和月度归档保持统一卡片布局', async ({ page }) 
   await expect(page.locator('.fwe-game-card')).toHaveCount(2);
 });
 
-test('首页两列卡片依次填满，且隐藏内容容器内的非文章杂项元素', async ({ page }) => {
+test('首页多列卡片依次填满，且隐藏内容容器内的非文章杂项元素', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./');
-  const leftFirst = page.locator('.fwe-stream__col--left article.hentry').first();
-  const rightFirst = page.locator('.fwe-stream__col--right article.hentry').first();
-  await expect(leftFirst).toBeVisible();
-  await expect(rightFirst).toBeVisible();
+  const cards = page.locator('.fwe-stream > article.hentry');
+  const firstCard = cards.nth(0);
+  const secondCard = cards.nth(1);
+  await expect(firstCard).toBeVisible();
+  await expect(secondCard).toBeVisible();
 
-  const leftRect = await leftFirst.boundingBox();
-  const rightRect = await rightFirst.boundingBox();
-  expect(leftRect).not.toBeNull();
-  expect(rightRect).not.toBeNull();
+  const firstRect = await firstCard.boundingBox();
+  const secondRect = await secondCard.boundingBox();
+  expect(firstRect).not.toBeNull();
+  expect(secondRect).not.toBeNull();
 
-  expect(leftRect?.x).toBeLessThan(rightRect?.x ?? 0);
-  expect(leftRect?.y).toBeCloseTo(rightRect?.y ?? 0, 1);
+  expect(firstRect?.x).toBeLessThan(secondRect?.x ?? 0);
+  expect(firstRect?.y).toBeCloseTo(secondRect?.y ?? 0, 1);
 });
 
 test('独立页面（popular、a-z、updates）使用单列居中布局且占满内容区', async ({ page }) => {

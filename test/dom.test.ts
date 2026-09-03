@@ -4,8 +4,11 @@ import {
   detectPageKind,
   DomTransaction,
   extractFacts,
-  parseArticle,
+  formatRelativeTime,
   parseArchiveGroups,
+  parseArticle,
+  parseArticleDate,
+  parseDateString,
   parseNavigation,
   parsePopularItems,
   parseUpcomingItems,
@@ -145,5 +148,56 @@ describe('状态与恢复', () => {
     expect(a.hasAttribute('aria-label')).toBe(false);
     expect(a.classList.contains('active')).toBe(false);
     expect(generated.isConnected).toBe(false);
+  });
+
+  it('准确解析 FitGirl 特有的欧洲日期格式与嵌套 time 元素', () => {
+    // 1. 真实站点的 span.entry-date 内嵌 time[datetime]
+    mount(
+      '<header class="entry-header"><span class="entry-date"><a href="#"><time class="entry-date" datetime="2026-09-03T05:24:01+03:00">03/09/2026</time></a></span></header>',
+    );
+    const header = document.querySelector('header') as HTMLElement;
+    const spanDate = header.querySelector('.entry-date') as HTMLElement;
+    const parsed = parseArticleDate(spanDate, header);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.getFullYear()).toBe(2026);
+    expect(parsed?.getMonth()).toBe(8); // 9月（0-indexed 8）
+    expect(parsed?.getDate()).toBe(3);
+
+    // 2. 纯 DD/MM/YYYY 文本格式（非 ISO，易被当成 MM/DD/YYYY 的陷阱）
+    const parsedDmy = parseDateString('03/09/2026');
+    expect(parsedDmy).not.toBeNull();
+    expect(parsedDmy?.getFullYear()).toBe(2026);
+    expect(parsedDmy?.getMonth()).toBe(8); // September
+    expect(parsedDmy?.getDate()).toBe(3);
+
+    // 3. 英文月份文本
+    const parsedEng = parseDateString('September 2, 2026');
+    expect(parsedEng).not.toBeNull();
+    expect(parsedEng?.getMonth()).toBe(8);
+    expect(parsedEng?.getDate()).toBe(2);
+  });
+
+  it('相对时间根据日历天与发布时差准确生成，杜绝错算', () => {
+    const fixedNow = new Date('2026-09-03T12:00:00Z');
+
+    // 5 小时前（当天发布） -> Today
+    const todayPost = new Date('2026-09-03T07:00:00Z');
+    expect(formatRelativeTime(todayPost, fixedNow)).toBe('Today');
+
+    // 26 小时前（昨天发布） -> Yesterday
+    const yesterdayPost = new Date('2026-09-02T10:00:00Z');
+    expect(formatRelativeTime(yesterdayPost, fixedNow)).toBe('Yesterday');
+
+    // 3 天前 -> 3d ago
+    const threeDaysAgo = new Date('2026-08-31T10:00:00Z');
+    expect(formatRelativeTime(threeDaysAgo, fixedNow)).toBe('3d ago');
+
+    // 10 天前 -> 1w ago
+    const tenDaysAgo = new Date('2026-08-24T10:00:00Z');
+    expect(formatRelativeTime(tenDaysAgo, fixedNow)).toBe('1w ago');
+
+    // 6 个月前 -> 6mo ago
+    const sixMonthsAgo = new Date('2026-03-03T10:00:00Z');
+    expect(formatRelativeTime(sixMonthsAgo, fixedNow)).toBe('6mo ago');
   });
 });

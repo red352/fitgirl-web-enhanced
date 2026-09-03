@@ -147,8 +147,14 @@ function collectSections(entry: HTMLElement): Map<SectionKind, ArticleSection> {
     let end = index + 1;
     while (end < children.length) {
       const candidate = children[end];
-      if (!candidate || classifySectionHeading(candidate) || candidate.matches('.su-spoiler'))
-        break;
+      if (!candidate || classifySectionHeading(candidate)) break;
+      // 遇到独立的 Game Description 剧透块时才结束当前 section
+      if (candidate.matches('.su-spoiler')) {
+        const titleText = normalizeText(candidate.querySelector('.su-spoiler-title')?.textContent);
+        if (/game\s+description/i.test(titleText)) {
+          break;
+        }
+      }
       end += 1;
     }
     const range = children.slice(index, end);
@@ -161,9 +167,25 @@ function collectSections(entry: HTMLElement): Map<SectionKind, ArticleSection> {
     index = end - 1;
   }
 
-  const spoiler = entry.querySelector<HTMLElement>(':scope > .su-spoiler');
-  if (spoiler) {
-    sections.set('description', { kind: 'description', heading: null, nodes: [spoiler] });
+  // 单独精准寻找 Game Description 剧透块
+  for (const child of children) {
+    if (child.matches('.su-spoiler')) {
+      const titleText = normalizeText(child.querySelector('.su-spoiler-title')?.textContent);
+      if (/game\s+description/i.test(titleText)) {
+        sections.set('description', { kind: 'description', heading: null, nodes: [child] });
+        break;
+      }
+    }
+  }
+
+  // 兜底：若未匹配到明确的 Game Description，选择未被 downloads 占用的最后一个 su-spoiler
+  if (!sections.has('description')) {
+    const downloadsNodes = sections.get('downloads')?.nodes ?? [];
+    const allSpoilers = [...entry.querySelectorAll<HTMLElement>('.su-spoiler')];
+    const candidate = allSpoilers.reverse().find((s) => !downloadsNodes.includes(s));
+    if (candidate) {
+      sections.set('description', { kind: 'description', heading: null, nodes: [candidate] });
+    }
   }
   return sections;
 }
@@ -435,4 +457,107 @@ export class DomTransaction {
     this.generated.length = 0;
     this.cleanups.length = 0;
   }
+}
+
+export function parseDateString(str: string): Date | null {
+  if (!str) return null;
+  const trimmed = str.trim();
+
+  // 1. ISO 8601 或带有时间戳的 YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    const d = new Date(trimmed);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
+  // 2. 欧洲制 DD/MM/YYYY 或 DD.MM.YYYY 或 DD-MM-YYYY
+  const dmyMatch = trimmed.match(
+    /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/,
+  );
+  if (dmyMatch && dmyMatch[1] && dmyMatch[2] && dmyMatch[3]) {
+    const day = Number.parseInt(dmyMatch[1], 10);
+    const month = Number.parseInt(dmyMatch[2], 10) - 1;
+    const year = Number.parseInt(dmyMatch[3], 10);
+    const hour = dmyMatch[4] ? Number.parseInt(dmyMatch[4], 10) : 0;
+    const minute = dmyMatch[5] ? Number.parseInt(dmyMatch[5], 10) : 0;
+    const second = dmyMatch[6] ? Number.parseInt(dmyMatch[6], 10) : 0;
+    const d = new Date(year, month, day, hour, minute, second);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
+  // 3. 英文月份（如 "September 2, 2026"、"02 Sep 2026"）
+  const fallback = new Date(trimmed);
+  if (!Number.isNaN(fallback.getTime())) return fallback;
+
+  return null;
+}
+
+export function parseArticleDate(
+  dateElement: HTMLElement | null,
+  headerElement?: HTMLElement | null,
+): Date | null {
+  if (!dateElement && !headerElement) return null;
+
+  const timeNode =
+    dateElement?.tagName === 'TIME'
+      ? (dateElement as HTMLTimeElement)
+      : (dateElement?.querySelector?.<HTMLTimeElement>('time') ??
+        headerElement?.querySelector?.<HTMLTimeElement>('time'));
+
+  const rawDateTime =
+    timeNode?.getAttribute('datetime') ||
+    timeNode?.dateTime ||
+    dateElement?.getAttribute('datetime');
+
+  if (rawDateTime) {
+    const parsed = parseDateString(rawDateTime);
+    if (parsed) return parsed;
+  }
+
+  const text = normalizeText(timeNode?.textContent || dateElement?.textContent);
+  if (text) {
+    const parsed = parseDateString(text);
+    if (parsed) return parsed;
+  }
+
+  return null;
+}
+
+export function formatRelativeTime(targetDate: Date, now: Date = new Date()): string {
+  const diffMs = now.getTime() - targetDate.getTime();
+
+  if (diffMs <= 0) {
+    return 'Today';
+  }
+
+  const diffHours = diffMs / (1000 * 60 * 60);
+  const todayCalendar = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const targetCalendar = new Date(
+    targetDate.getFullYear(),
+    targetDate.getMonth(),
+    targetDate.getDate(),
+  ).getTime();
+  const calendarDayDiff = Math.round((todayCalendar - targetCalendar) / 86400000);
+
+  if (calendarDayDiff <= 0 || diffHours < 18) {
+    return 'Today';
+  }
+
+  if (calendarDayDiff === 1 || (diffHours >= 18 && diffHours < 42)) {
+    return 'Yesterday';
+  }
+
+  const days = Math.max(2, Math.floor(diffHours / 24));
+  if (days < 7) {
+    return `${days}d ago`;
+  }
+  if (days < 30) {
+    const weeks = Math.floor(days / 7);
+    return `${weeks}w ago`;
+  }
+  if (days < 365) {
+    const months = Math.floor(days / 30);
+    return `${months}mo ago`;
+  }
+  const years = Math.floor(days / 365);
+  return `${years}y ago`;
 }

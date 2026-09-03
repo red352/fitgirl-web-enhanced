@@ -1,126 +1,289 @@
 # FitGirl Web Enhanced
 
-> A lightweight, responsive and reversible userscript that reorganizes FitGirl Repacks pages without collecting data or replacing original links.
+<p align="center">
+  <a href="https://github.com/red352/fitgirl-web-enhanced/releases"><img src="https://img.shields.io/badge/Userscript-v1.4.1-blue.svg?style=flat-square" alt="Userscript Version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License" /></a>
+  <a href="https://fitgirl-repacks.site/"><img src="https://img.shields.io/badge/Target-fitgirl--repacks.site-purple.svg?style=flat-square" alt="Target Site" /></a>
+  <a href="#权限与隐私安全"><img src="https://img.shields.io/badge/@grant-none-success.svg?style=flat-square" alt="Permissions: None" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/Built_with-Vite_%7C_TypeScript-646CFF.svg?style=flat-square" alt="Tech Stack" /></a>
+</p>
 
-FitGirl Web Enhanced 是面向 `fitgirl-repacks.site` 的渐进增强 Userscript。它将冗长的文章流重排为紧凑卡片与宽屏详情布局，同时保留全部原始正文、截图、试玩视频、下载链接和 magnet URL。随时可切换回原站布局，且选择会保存在浏览器中。
+<p align="center">
+  面向 <strong>FitGirl Repacks</strong> 的现代化、轻量级且无损可逆的用户脚本（Userscript）。<br />
+  在严格保留站点所有原始正文、下载镜像、视频截图与 Magnet 链接的前提下，通过工程化手段重构网格排版与阅读体验。
+</p>
 
-[一键安装 Userscript](https://raw.githubusercontent.com/red352/fitgirl-web-enhanced/master/dist/fitgirl-enhanced.user.js) · [反馈问题](https://github.com/red352/fitgirl-web-enhanced/issues)
+<p align="center">
+  <a href="https://raw.githubusercontent.com/red352/fitgirl-web-enhanced/master/dist/fitgirl-enhanced.user.js"><strong>🚀 一键安装 Userscript</strong></a> ·
+  <a href="https://cdn.jsdelivr.net/gh/red352/fitgirl-web-enhanced@master/dist/fitgirl-enhanced.user.js">备用 CDN 安装</a> ·
+  <a href="https://github.com/red352/fitgirl-web-enhanced/issues">反馈问题 / 提交建议</a>
+</p>
 
-## 核心功能
+---
 
-- **双列自适应瀑布流（Dual-Column Masonry）**：宽屏下卡片按时序交替分配至独立双立柱，纵向紧密吸附贴合，彻底消除卡片展开截图带来的大面积高差留白；中小屏自适应单列。
-- **结构防偏与纯净隔离**：全面隔离 FitGirl/WordPress 原生清除浮动伪元素与分页广告游离节点，杜绝布局右偏与空位抢占；`Upcoming Repacks` 始终稳居页面顶部全宽铺开。
-- **游戏封面原貌展示**：封面海报由 `cover` 调整为 `contain` 适应比例，杜绝边缘标题与细节裁剪。
-- **全屏磨砂玻璃 Lightbox 大图灯箱**：
-  - 点击任何截图或视频缩略图即刻呼出沉浸式灯箱，0ms 首帧秒开并后台静默升级高清原图。
-  - 支持**鼠标滚轮焦点缩放（Focal Zoom）**、**双击放大至 2.2x**、**按住鼠标拖拽平移**与**快捷键（Esc 退出、←/→ 切图、Ctrl +/-/0 缩放）**。
-  - 原生 `<video>` 试玩动图循环播放支持。
-- **折叠收纳与快速镜像**：Direct Links 与 Torrent 合并为 `Download Mirrors` disclosure；`Repack Features` 和 `Game Description` 默认收起。
-- **抽屉式热门榜单与导航**：`Most Popular Repacks of the Week` 改为桌面右侧抽屉、移动端底部 Sheet，不再常驻占位。
-- **分类与目录统一**：搜索结果、Updates Digest、Popular Repacks、A-Z、Updates List 与月度归档使用统一的响应式视觉系统。
-- **首屏无闪现（FOUC 消除）**：基于 `@run-at: document-start` 与同步 Fast-Path 偏好注入，杜绝原版白屏或未样式化闪跳。
-- **无感可逆与状态持久**：View 控制菜单收纳 **Enhanced View** 视图模式与 **Expand Screenshots** 媒体预览开关；Original View 隐藏所有注入控件并提供右下角快速恢复入口，配置即时保存于本地。
+## 目录
 
-## 实际渲染
+- [项目概述](#项目概述)
+- [核心特性](#核心特性)
+- [界面预览](#界面预览)
+- [安装指南](#安装指南)
+- [交互与快捷键](#交互与快捷键)
+- [技术架构与设计原则](#技术架构与设计原则)
+- [权限与隐私安全](#权限与隐私安全)
+- [兼容性](#兼容性)
+- [本地开发与测试](#本地开发与测试)
+- [常见问题与排障](#常见问题与排障)
+- [贡献指南](#贡献指南)
+- [免责声明与开源许可](#免责声明与开源许可)
 
-以下截图由当前构建产物在固定 HTML fixture 中真实运行后生成，并由 Playwright 视觉回归保护。
+---
 
-### 桌面浏览页
+## 项目概述
 
-![桌面浏览页](docs/assets/listing-desktop.png)
+FitGirl Repacks 原版页面基于经典博客流式布局，在现代高分辨率显示器或宽屏设备上存在屏幕利用率低、图文混排篇幅过长、长列表浏览易疲劳等问题。
 
-### 移动浏览页
+**FitGirl Web Enhanced** 采用渐进增强策略，在不依赖任何特权脚本权限（`@grant none`）的纯前端沙箱环境下工作：
 
-![移动浏览页](docs/assets/listing-mobile.png)
+- **布局重构**：将冗长的文章流重塑为行对齐的自适应栅格卡片，大幅提升信息检索效率。
+- **无损可逆**：底层采用双向事务记录器，不破坏原始 DOM 结构与原生属性，支持随时一键回退至原生视图。
+- **即插即用**：零外部依赖，支持主流浏览器脚本管理器，具备静默自更新机制。
 
-### 桌面详情页
+---
 
-![桌面详情页](docs/assets/detail-desktop.png)
+## 核心特性
 
-### 移动热门榜单
+### 1. 严格行拉齐网格流（Row-Aligned Grid Flow）
 
-![移动热门榜单](docs/assets/popular-mobile.png)
+- **基准行等高拉齐**：采用标准 CSS Grid 布局，每行卡片顶部与底部高度严格对齐（`align-items: stretch`），消除错落瀑布流导致的阅读基线跳跃与新旧顺序混淆。
+- **视口断点响应**：
+  - **移动端 / 紧凑视口（< 1152px）**：单列自适应流式排版；
+  - **标准桌面 / 笔记本（1152px ~ 1699px）**：双列平衡卡片流；
+  - **2K / 宽屏显示器（1700px ~ 2399px）**：自适应三列平铺；
+  - **4K / 超宽屏显示器（≥ 2400px）**：自适应四列高密度排版。
+- **时序权重标识**：
+  - 首张最新发布的游戏卡片配有专属光晕高亮；
+  - 前三位发布条目使用梯级品红徽章（`#1`, `#2`, `#3`）标定优先级；
+  - 卡片顶部包含人性化相对发布时间标签（如 `Today`、`Yesterday`、`2d ago` 等）。
+- **海报原比呈现**：游戏封面采用 `object-fit: contain`，杜绝边缘标题与细节截断。
 
-## 安装
+### 2. 无缝无限滚动（Infinite Scroll）
 
-1. 安装 [Tampermonkey](https://www.tampermonkey.net/)、Violentmonkey 或 Greasemonkey。
-2. 打开 [Raw 安装地址](https://raw.githubusercontent.com/red352/fitgirl-web-enhanced/master/dist/fitgirl-enhanced.user.js)。
-3. 在脚本管理器的安装页确认。之后访问 `https://fitgirl-repacks.site/` 即可使用。
+- 向下滚动接近页面底部时，后台平滑预加载下一页资源并按行追加至列表底部，杜绝页面跳动与重排。
+- 在顶部 **View** 控制菜单中提供持久化开关（默认启用），关闭后无损恢复原生数字分页导航。
 
-脚本通过元数据中的 `@updateURL` 与 `@downloadURL` 检查 `master` 分支的发布产物；版本判断由 `@version` 驱动。
+### 3. 多媒体交互灯箱（Lightbox）
 
-## 使用说明
+- 点击任何截图或视频缩略图即可呼出全屏灯箱，支持即时低清占位并异步平滑切换至高清原图。
+- 完整支持原生 `<video>` 演示动画循环播放。
+- 深度集成桌面交互：鼠标指针焦点平滑缩放、双击放大/重置、按住平移浏览高分辨率局部细节，以及完整键盘快捷键操作。
 
-- 默认启用 **Enhanced View**。顶部 **View** 菜单可切换 **Enhanced View** 模式以及 **Expand Screenshots**（截图与试玩默认展开状态）；原站模式下右下角入口可随时恢复。
-- 点击 **Browse** 可访问完整站点路由与 Monthly Archives；点击 **Popular** 打开热门榜单。
-- 下载、特性和游戏介绍默认收起，点击标题或使用键盘 `Enter` / `Space` 展开。
-- 若增强界面异常，先切换到 Original View；也可在浏览器站点数据中清除键 `fitgirl-web-enhanced:v1:layout` 与 `fitgirl-web-enhanced:v1:media-expand`。
+### 4. 模态详情与结构收纳
+
+- **列表卡片快捷弹窗**：卡片底部集成 `Download Mirrors`、`Features`、`Description` 快捷触发键，无需离开列表即可在模态弹窗中快速查阅下载链接与详细说明。
+- **详情页轻量折叠**：下载源与网盘镜像聚合为标准 Disclosure 折叠块，默认收起特性与介绍，大幅精简页面初次呈现高度。
+- **结构规范化**：自动隔离 WordPress 清除浮动伪元素与游离广告节点，避免非预期空白占位；`Upcoming Repacks` 始终全宽吸顶居中。
+
+### 5. 统一导航与抽屉容器
+
+- **热门榜单解耦**：将原常驻侧边栏的 `Most Popular Repacks of the Week` 改为桌面端右侧抽屉、移动端底部抽屉（Bottom Sheet），按需呼出。
+- **全局路由面板**：顶部导航提供 **Browse** 下拉面板，快速访问站点常用分类、A-Z 索引与按月历史归档。
+- **全站风格一致性**：对搜索结果页、Updates Digest、归档页等特殊页面提供统一的响应式风格适配。
+
+### 6. 零闪烁加载与状态持久化
+
+- 基于 `@run-at: document-start` 注入与同步 Fast-Path 状态预检，在 DOM 解析初期即注入视图控制属性，彻底消除无样式内容闪烁（FOUC）。
+- 偏好设置采用 `localStorage` 与 `IndexedDB` 双层容错存储，跨会话与多标签页保持同步。
+
+---
+
+## 界面预览
+
+> 界面预览截图基于当前 v1.4.1 构建产物在标准环境及各典型视口下由自动化驱动真实渲染拍摄。
+
+|           桌面浏览页（网格流与卡片）           |                 移动端浏览页                  |
+| :--------------------------------------------: | :-------------------------------------------: |
+| ![桌面浏览页](docs/assets/listing-desktop.png) | ![移动浏览页](docs/assets/listing-mobile.png) |
+
+|       桌面详情页（折叠收纳与媒体展示）        |           移动端热门榜单（抽屉面板）            |
+| :-------------------------------------------: | :---------------------------------------------: |
+| ![桌面详情页](docs/assets/detail-desktop.png) | ![移动热门榜单](docs/assets/popular-mobile.png) |
+
+|     卡片快捷模态弹窗（快速查阅下载镜像与特性）     |
+| :------------------------------------------------: |
+| ![卡片快捷模态弹窗](docs/assets/modal-desktop.png) |
+
+---
+
+## 安装指南
+
+### 前置要求
+
+在浏览器中安装任意一款支持现代 Userscript 规范的脚本管理器扩展：
+
+- [Tampermonkey](https://www.tampermonkey.net/)（推荐，Chrome / Edge / Firefox / Safari）
+- [Violentmonkey](https://violentmonkey.github.io/)
+- [Greasemonkey](https://www.greasespot.net/)
+
+### 安装步骤
+
+1. 点击安装链接：[Raw 脚本安装](https://raw.githubusercontent.com/red352/fitgirl-web-enhanced/master/dist/fitgirl-enhanced.user.js)（国内网络环境可选 [jsDelivr 镜像](https://cdn.jsdelivr.net/gh/red352/fitgirl-web-enhanced@master/dist/fitgirl-enhanced.user.js)）；
+2. 脚本管理器将自动弹出确认界面，点击 **安装**（Install）；
+3. 访问 [fitgirl-repacks.site](https://fitgirl-repacks.site/)，页面将自动以增强模式呈现。
+
+### 自动更新
+
+脚本在元数据头中声明了 `@updateURL` 与 `@downloadURL`。每次脚本仓库发布新版本后，脚本管理器会在后台检测版本差异并提示自动升级。
+
+---
+
+## 交互与快捷键
+
+### 多媒体灯箱快捷键
+
+| 快捷键                                                        | 功能操作                         |
+| :------------------------------------------------------------ | :------------------------------- |
+| <kbd>←</kbd>                                                  | 切换至上一张截图 / 媒体          |
+| <kbd>→</kbd>                                                  | 切换至下一张截图 / 媒体          |
+| <kbd>+</kbd> / <kbd>=</kbd> 或 <kbd>Ctrl</kbd> + <kbd>+</kbd> | 放大当前视图                     |
+| <kbd>-</kbd> 或 <kbd>Ctrl</kbd> + <kbd>-</kbd>                | 缩小当前视图                     |
+| <kbd>0</kbd> 或 <kbd>Ctrl</kbd> + <kbd>0</kbd>                | 重置缩放与位移为原始比例（1.0x） |
+| <kbd>Esc</kbd>                                                | 退出全屏灯箱                     |
+
+### 鼠标与手势交互
+
+- **缩放**：在灯箱开启状态下，使用鼠标滚轮可按当前指针所在焦点进行无级平滑缩放。
+- **快速缩放**：双击图片可在原始比例与 2.2 倍放大倍率之间快速切换。
+- **拖拽平移**：当图片放大处于视口之外时，按住鼠标左键即可自由拖拽平移画布。
+- **模态窗口导航**：所有弹窗与抽屉均支持按 <kbd>Esc</kbd> 快速关闭，或点击背景半透明遮罩层关闭。
+
+---
+
+## 技术架构与设计原则
+
+```
+src/
+├── dom.ts          # DOM 解析器、正文栏目提取、页面特征识别与双向还原事务管理器
+├── ui.ts           # 响应式卡片流、媒体墙、模态弹窗、导航抽屉与 Lightbox 控制器
+├── preferences.ts  # 同步 Fast-Path 偏好注入、localStorage / IndexedDB 容错持久化
+├── types.ts        # 全局 TypeScript 接口与领域模型定义
+├── icons.ts        # 内联 SVG 图标生成器
+├── style.css       # 媒体查询、容器查询与基于作用域隔离的样式定义
+└── main.ts         # 生命周期初始化入口与运行时沙箱引导
+```
+
+- **双向事务记录器（Reversible Transactions）**：
+  增强脚本对页面的结构调整并非破坏性修改，而是通过事务记录器捕获节点的原始父级容器、兄弟节点相对位置、行内样式与原始 Class。当切换至 `Original View` 时，事务以逆序精确执行还原，保证与原生页面 100% 一致。
+- **动态 Mutation 隔离**：
+  内部采用 `WeakSet` 与专用标记属性追踪已处理的 DOM 节点，在无缝无限滚动加载或外部脚本注入时，仅增量处理全新节点，避免重复计算或嵌套包装。
+- **样式作用域隔离**：
+  所有增强 CSS 样式严格限定在 `html[data-fwe-mode="enhanced"]` 选择器作用域下，确保在原站视图下不残留任何全局样式污染。
+
+---
+
+## 权限与隐私安全
+
+- **零特权声明（`@grant none`）**：脚本不请求、不使用任何高级脚本管理器 API，运行环境与普通网页脚本完全一致。
+- **零外部请求与数据上报**：除浏览器加载页面自身包含的图片资源外，脚本不向任何第三方服务器发送网络请求，不收集任何用户浏览数据或访问凭据。
+- **同源存储隔离**：本地配置仅保存在站点同源的 `localStorage` 与 `IndexedDB` 中，键名分别为：
+  - `fitgirl-web-enhanced:v1:layout-mode`：视图模式配置（`enhanced` / `original`）；
+  - `fitgirl-web-enhanced:v1:media-expand`：详情页媒体默认展开偏好；
+  - `fitgirl-web-enhanced:v1:infinite-scroll`：列表页无限滚动开关状态。
+
+---
 
 ## 兼容性
 
-| 环境                                        | 支持情况                 |
-| ------------------------------------------- | ------------------------ |
-| Tampermonkey / Violentmonkey / Greasemonkey | 支持标准 Userscript 安装 |
-| Chromium、Firefox 最新稳定版                | 主要目标                 |
-| 390px 手机至 1920px 宽屏                    | 自动响应式适配           |
-| JavaScript 被禁用                           | 保持原站页面，不执行增强 |
+| 运行环境       | 兼容支持说明                                                                    |
+| :------------- | :------------------------------------------------------------------------------ |
+| **脚本管理器** | Tampermonkey、Violentmonkey、Greasemonkey 等兼容标准 Userscript 规范的扩展      |
+| **浏览器内核** | Chromium 系（Chrome, Edge, Brave, Vivaldi）、Firefox 等最新主流稳定版           |
+| **视口跨度**   | 覆盖 390px 移动端单列至 4K+ 超宽屏四列自适应排版                                |
+| **异常降级**   | 当 DOM 结构发生未知变更或脚本运行异常时，自动安全降级至原站排版，不影响正文显示 |
 
-目标站点基于 WordPress，站点结构发生重大调整后可能需要更新 DOM 适配器。脚本对缺失节点采用安全回退，不会为了样式删除无法识别的正文。
+---
 
-## 权限与隐私
+## 本地开发与测试
 
-- `@grant none`：不申请脚本管理器特权 API。
-- 不发起跨域请求，不上传或收集浏览数据。
-- 仅使用当前页面已有内容和图片地址。
-- 用户首选项保存在同源 `localStorage` 与 IndexedDB；主键为 `fitgirl-web-enhanced:v1:layout` 与 `fitgirl-web-enhanced:v1:media-expand`，不含任何跨站数据。
+### 环境依赖
 
-## 本地开发
+- [Node.js](https://nodejs.org/) `>= 22.12`
+- [npm](https://www.npmjs.com/)
 
-要求 Node.js `>=22.12` 和 npm。
+### 工作流命令
 
 ```bash
+# 安装依赖
 npm ci
+
+# 启动本地热重载开发服务
 npm run dev
+
+# 静态类型检查
 npm run typecheck
+
+# 代码规范检查与格式校验
 npm run lint
-npm test
+npm run format:check
+
+# 执行单元测试
+npm run test
+
+# 构建生产产物（输出至 dist/fitgirl-enhanced.user.js）
 npm run build
+
+# 执行 Playwright 端到端及视觉快照测试
 npm run test:e2e
-```
 
-生产构建输出为 `dist/fitgirl-enhanced.user.js`。提交前建议运行：
+# 自动化重拍文档高清预览图（输出至 docs/assets/）
+npm run capture
 
-```bash
+# 综合前置检查（流水线推荐）
 npm run check
-npm run test:e2e
 ```
 
-## 架构简介
+---
 
-- `src/dom.ts`：页面识别、栏目解析、热门榜单解析和可逆 DOM 事务。
-- `src/ui.ts`：卡片、完整媒体墙、disclosure、顶部导航、归档抽屉、View 菜单（Enhanced View & Expand Screenshots 开关）和 dialog 控制器。
-- `src/preferences.ts`：零权限的 localStorage/IndexedDB 双层偏好容错存储与同步 Fast-Path。
-- `src/style.css`：全部增强样式均限定在 `html[data-fwe-mode="enhanced"]`，以媒体查询和容器查询完成响应式布局。
-- `test/`：Vitest/jsdom 单元测试、确定性 fixture、五档视口端到端测试和视觉快照。
-- `vite.config.ts`：`vite-plugin-monkey` 元数据配置（`@run-at: document-start`）及单文件发布构建。
+## 常见问题与排障
 
-增强时，事务会记录节点原父级、相邻节点、原属性与原 class；停用时逆序恢复。MutationObserver 只处理尚未标记的文章，避免 AJAX 内容或重复回调产生嵌套包装。
+### Q1: 安装脚本后页面样式未发生变化？
 
-## 故障排查
+- 请确认当前访问的 URL 是否严格匹配 `https://fitgirl-repacks.site/*`；
+- 确认脚本管理器中该脚本已处于“启用”状态；
+- 若此前曾切换至原生视图，请点击页面右下角的恢复图标，或在控制台执行 `localStorage.clear()` 重置配置。
 
-- **页面看起来仍是原站：** 检查脚本是否启用，并确认地址为 HTTPS 的 `fitgirl-repacks.site`。
-- **部分文章未变成卡片：** Updates Digest 等特殊内容会故意使用全宽保守布局，确保不丢失正文。
-- **站点更新后排版异常：** 切换 Original View 后在 [Issues](https://github.com/red352/fitgirl-web-enhanced/issues) 提供页面地址、浏览器版本和截图。
-- **自动更新未触发：** 在脚本管理器中手动“检查更新”，并确认 GitHub Raw 可访问。
+### Q2: 为什么个别非游戏文章未呈现为网格卡片？
 
-## 贡献
+- Updates Digest、公告通知或特殊格式文章由于不包含标准 Repack 信息段，脚本会主动采用保真全宽布局，以防止漏读关键文本或损坏排版。
 
-欢迎提交 Issue 或 Pull Request。请保持改动聚焦，使用祈使式提交信息，并确保 `npm run check`、`npm run test:e2e` 和构建产物同步检查通过。维护者：[@red352](https://github.com/red352)。
+### Q3: 站点改版后遇到排版错位如何反馈？
 
-## 免责声明
+- 建议先通过顶部 **View** 菜单切换至 **Original View** 保证正常访问；
+- 欢迎前往 [GitHub Issues](https://github.com/red352/fitgirl-web-enhanced/issues) 提交工单，并附上具体页面链接、浏览器版本及控制台错误日志截图。
 
-本项目仅改善网页的本地显示与交互，不托管、索引或分发任何游戏文件，也不隶属于 FitGirl Repacks。使用者应遵守所在地法律、目标站点规则及软件许可；作者不对第三方内容、链接可用性或使用后果负责。
+---
 
-## 许可证
+## 贡献指南
 
-[MIT](LICENSE) © 2026 red352
+欢迎任何有助于完善本项目体验的贡献！
+
+1. Fork 本仓库并基于最新代码创建分支；
+2. 遵循现有的 ESLint 与 Prettier 代码规范；
+3. 提交前确保通过 `npm run check` 与 `npm run test:e2e`；
+4. 提交清晰、规范的 Git 提交说明（推荐语义化提交，如 `feat: ...`, `fix: ...`）。
+
+---
+
+## 免责声明与开源许可
+
+### 免责声明
+
+本脚本仅属于个人开发用于改善网页排版与本地浏览体验的无侵入式前端增强工具。
+
+- 脚本自身不托管、不存储、不解析、亦不分发任何受版权保护的二进制文件、种子或数据流。
+- 脚本与 FitGirl Repacks 官方无任何隶属或雇佣关系。
+- 使用者应自行遵守所在国家/地区法律法规，作者不对任何第三方链接的有效性或使用者的行为承担法律责任。
+
+### 开源许可
+
+本项目基于 [MIT 许可证](LICENSE) 授权开源。<br />
+Copyright © 2026 red352

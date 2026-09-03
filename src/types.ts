@@ -93,6 +93,11 @@ export interface StoredMediaPreference {
   updatedAt: number;
 }
 
+export interface StoredInfiniteScrollPreference {
+  enabled: boolean;
+  updatedAt: number;
+}
+
 export interface DomRestoreRecord {
   node: Node;
   parent: Node;

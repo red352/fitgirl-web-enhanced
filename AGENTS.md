@@ -26,6 +26,7 @@
   - Use `GM_getValue` / `GM_setValue` (or `localStorage`) prefixed with a distinct namespace for user preferences.
 
 ## Git & Contribution Rules
+- **禁止自主提交（No Autonomous Commits）**：除非用户在此轮对话中给出了明确的提交指令（例如明确说出“提交代码”、“commit”等），否则严禁自动执行 `git commit` 或 `git push`。代码修改、测试与构建完成后，应当向用户汇报状态并等待用户确认，不得擅自创建提交。
 - Keep commits concise and imperative (e.g., `feat: add magnet quick-copy button`, `fix: update selectors for post links`).
 - Do not commit local user config or browser-specific test tokens.
 

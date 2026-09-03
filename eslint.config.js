@@ -15,7 +15,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['test/live-qa.mjs'],
+    files: ['test/live-qa.mjs', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: {
         console: 'readonly',
