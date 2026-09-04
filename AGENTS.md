@@ -37,3 +37,12 @@
 - **Direct URL Install**: 脚本编译产物保持在 `dist/fitgirl-enhanced.user.js`，在 GitHub 仓库发布后，用户直接访问 `raw.githubusercontent.com` 或 jsDelivr CDN 链接即可触发油猴（Tampermonkey / Violentmonkey）的一键安装界面。
 - **Auto-Update (`@updateURL` & `@downloadURL`)**: 在 Userscript 元数据头配置可靠的自更新地址与下载地址，确保油猴插件能够在后台静默检测新版本并提示升级。
 
+## Version Management & Bumping Rules（版本管理规范）
+- **单一事实来源（SSOT）**：`package.json` 中的 `"version"` 为项目版本的唯一标准。`vite.config.ts` 必须动态引用 `package.json` 中的版本号，严禁在配置中硬编码版本字符串。
+- **一键统一升级命令**：项目版本升级统一使用 `npm run bump <patch | minor | major | x.y.z>` 命令执行，严禁手动分头修改多个文件。
+  - `patch`：Bug 修复、补丁升级（如 `1.4.1` -> `1.4.2`）
+  - `minor`：新增功能、特性增强（如 `1.4.1` -> `1.5.0`）
+  - `major`：架构重构、重大破坏性变更（如 `1.5.0` -> `2.0.0`）
+- **自动化联动范围**：`npm run bump` 会全自动同步 `package.json`、`package-lock.json`、`README.md` 顶部徽章，并自动触发 `npm run build` 重新编译生成携带最新 `@version` 头信息的 `dist/fitgirl-enhanced.user.js`。
+- **合规边界**：版本升级命令执行后，必须严格遵循「禁止自主提交」规则，等待用户确认后再行提交。
+

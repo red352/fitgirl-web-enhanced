@@ -18,7 +18,7 @@ export interface FactLink {
 }
 
 export interface GameFact {
-  label: 'Genres/Tags' | 'Company' | 'Languages' | 'Original Size' | 'Repack Size';
+  label: 'Genres/Tags' | 'Company' | 'Languages' | 'Original Size' | 'Repack Size' | 'Rating';
   value: string;
   links: FactLink[];
 }
@@ -42,6 +42,8 @@ export interface ParsedArticle {
   cover: HTMLImageElement | null;
   sections: Map<SectionKind, ArticleSection>;
   media: MediaItem[];
+  wrapperContainers?: HTMLElement[];
+  hasPinkPawAward?: boolean;
 }
 
 export interface UpcomingItem {
@@ -96,6 +98,25 @@ export interface StoredMediaPreference {
 export interface StoredInfiniteScrollPreference {
   enabled: boolean;
   updatedAt: number;
+}
+
+export interface StoredShowRatingsPreference {
+  enabled: boolean;
+  updatedAt: number;
+}
+
+export interface GameRatingData {
+  appId: number;
+  name: string;
+  positivePercent: number;
+  scoreDesc: string;
+  totalReviews: number;
+  totalPositive: number;
+  totalNegative: number;
+  metascore?: number;
+  metacriticUrl?: string;
+  steamUrl: string;
+  steamDbUrl: string;
 }
 
 export interface DomRestoreRecord {

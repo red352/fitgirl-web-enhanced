@@ -1,6 +1,7 @@
 {
   "name": "fitgirl-web-enhanced",
-  "version": "1.4.1",
+  "version": "1.5.0",
+  "description": "优化 FitGirl Repacks 的信息密度、宽屏布局、折叠内容与热门榜单。",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -21,7 +22,8 @@
     "test:e2e": "npm run build && playwright test",
     "test:live": "npm run build && node test/live-qa.mjs",
     "capture": "npm run build && node scripts/capture-assets.mjs",
-    "check": "npm run lint && npm run format:check && npm run test && npm run build"
+    "check": "npm run lint && npm run format:check && npm run test && npm run build",
+    "bump": "node scripts/bump-version.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -15,16 +15,21 @@ import {
   getFastStoredInfiniteScroll,
   getFastStoredLayoutMode,
   getFastStoredMediaExpand,
+  getFastStoredShowRatings,
   readStoredInfiniteScroll,
   readStoredLayoutMode,
   readStoredMediaExpand,
+  readStoredShowRatings,
   writeStoredInfiniteScroll,
   writeStoredLayoutMode,
   writeStoredMediaExpand,
+  writeStoredShowRatings,
 } from './preferences';
+import { cleanTitleBase, getGameRating, globalRatingQueue } from './rating';
 import type {
   ArchiveGroup,
   ArticleKind,
+  GameRatingData,
   LayoutMode,
   LightboxMedia,
   NavigationItem,
@@ -38,6 +43,7 @@ const FACT_ICONS = {
   Languages: 'language',
   'Original Size': 'drive',
   'Repack Size': 'download',
+  Rating: 'star',
 } as const;
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -515,17 +521,26 @@ function resolveMediaSource(item: {
   let src = rawImgSrc;
   let hdSrc: string | undefined;
 
-  // 自动将 http 协议升级为 https，避免跨协议阻塞
-  if (src.startsWith('http://')) {
+  // 自动将 http 协议升级为 https（排除本地测试回环地址），避免跨协议阻塞
+  if (
+    src.startsWith('http://') &&
+    !src.startsWith('http://localhost') &&
+    !src.startsWith('http://127.0.0.1')
+  ) {
     src = src.replace(/^http:\/\//i, 'https://');
   }
 
   if (src.includes('.240p.jpg')) {
     hdSrc = src.replace(/\.240p\.jpg$/, '');
-  } else if (/\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(item.element.href)) {
+  } else if (/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i.test(item.element.href)) {
     let directHref = item.element.href;
-    if (directHref.startsWith('http://'))
+    if (
+      directHref.startsWith('http://') &&
+      !directHref.startsWith('http://localhost') &&
+      !directHref.startsWith('http://127.0.0.1')
+    ) {
       directHref = directHref.replace(/^http:\/\//i, 'https://');
+    }
     if (directHref !== src) {
       hdSrc = directHref;
     }
@@ -977,7 +992,535 @@ function prepareMedia(
   return media;
 }
 
-function addArticleMeta(article: ParsedArticle, transaction: DomTransaction): void {
+function getRatingColorClass(percent: number): string {
+  if (percent >= 90) return 'fwe-rating--overwhelming';
+  if (percent >= 70) return 'fwe-rating--positive';
+  if (percent >= 40) return 'fwe-rating--mixed';
+  return 'fwe-rating--negative';
+}
+
+function getMetaColorClass(score: number): string {
+  if (score >= 75) return 'fwe-rating--meta-green';
+  if (score >= 50) return 'fwe-rating--meta-yellow';
+  return 'fwe-rating--meta-red';
+}
+
+export class RatingPopover {
+  private readonly element: HTMLElement;
+  private readonly title: HTMLElement;
+  private readonly appIdBadge: HTMLElement;
+  private readonly refreshBtn: HTMLButtonElement;
+  private readonly steamSection: HTMLElement;
+  private readonly scorePercent: HTMLElement;
+  private readonly scoreDesc: HTMLElement;
+  private readonly scoreBarFill: HTMLElement;
+  private readonly reviewsCount: HTMLElement;
+  private readonly metascoreRow: HTMLElement;
+  private readonly metascoreValue: HTMLElement;
+  private readonly unmatchedSection: HTMLElement;
+  private readonly actions: HTMLElement;
+  private readonly steamLink: HTMLAnchorElement;
+  private readonly steamDbLink: HTMLAnchorElement;
+  private readonly metacriticLink: HTMLAnchorElement;
+  private readonly unmatchedRetryBtn: HTMLButtonElement;
+  private hideTimeout: number | null = null;
+  public currentAnchor: HTMLElement | null = null;
+  private onRefreshCallback: (() => void) | null = null;
+
+  constructor() {
+    this.element = element('div', 'fwe-rating-popover');
+    this.element.setAttribute('role', 'tooltip');
+    this.element.setAttribute('aria-hidden', 'true');
+    this.element.style.setProperty('display', 'none');
+
+    const header = element('div', 'fwe-rating-popover__header');
+    this.title = element('div', 'fwe-rating-popover__title');
+
+    const headerRight = element('div', 'fwe-rating-popover__header-right');
+    this.appIdBadge = element('span', 'fwe-rating-popover__appid');
+    this.refreshBtn = element('button', 'fwe-rating-popover__refresh-btn');
+    this.refreshBtn.type = 'button';
+    this.refreshBtn.setAttribute('title', '强制重新获取评分（清除本地缓存）');
+    this.refreshBtn.setAttribute('aria-label', '强制重新获取评分');
+    this.refreshBtn.append(createIcon('refresh', 'fwe-rating-popover__refresh-icon'));
+    this.refreshBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.triggerRefresh();
+    });
+    headerRight.append(this.appIdBadge, this.refreshBtn);
+    header.append(this.title, headerRight);
+
+    // Steam 评测区域（匹配成功）
+    this.steamSection = element('div', 'fwe-rating-popover__section');
+    const steamHeadline = element('div', 'fwe-rating-popover__headline');
+    this.scorePercent = element('span', 'fwe-rating-popover__percent');
+    this.scoreDesc = element('span', 'fwe-rating-popover__desc');
+    steamHeadline.append(this.scorePercent, this.scoreDesc);
+
+    const scoreBar = element('div', 'fwe-rating-popover__bar');
+    this.scoreBarFill = element('div', 'fwe-rating-popover__bar-fill');
+    scoreBar.append(this.scoreBarFill);
+
+    this.reviewsCount = element('div', 'fwe-rating-popover__count');
+    this.steamSection.append(steamHeadline, scoreBar, this.reviewsCount);
+
+    // Metascore 区域
+    this.metascoreRow = element('div', 'fwe-rating-popover__metascore-row');
+    const metaLabel = element('span', 'fwe-rating-popover__meta-label', 'Metascore');
+    this.metascoreValue = element('span', 'fwe-rating-popover__meta-val');
+    this.metascoreRow.append(metaLabel, this.metascoreValue);
+
+    // 未收录/未匹配提示区域
+    this.unmatchedSection = element('div', 'fwe-rating-popover__unmatched-section');
+    const unmatchedText = element(
+      'div',
+      'fwe-rating-popover__unmatched-text',
+      '未能在 Steam 自动匹配到有效评测数据，可能是游戏在 Steam 暂无足够评价，或标题包含特殊别名。',
+    );
+    this.unmatchedSection.append(unmatchedText);
+
+    // 操作按钮列表
+    this.actions = element('div', 'fwe-rating-popover__actions');
+    this.steamLink = element('a', 'fwe-rating-popover__btn', 'Steam 商店');
+    this.steamLink.target = '_blank';
+    this.steamLink.rel = 'noopener noreferrer';
+
+    this.steamDbLink = element('a', 'fwe-rating-popover__btn', 'SteamDB');
+    this.steamDbLink.target = '_blank';
+    this.steamDbLink.rel = 'noopener noreferrer';
+
+    this.metacriticLink = element('a', 'fwe-rating-popover__btn', 'Metacritic');
+    this.metacriticLink.target = '_blank';
+    this.metacriticLink.rel = 'noopener noreferrer';
+
+    this.unmatchedRetryBtn = element(
+      'button',
+      'fwe-rating-popover__btn fwe-rating-popover__btn--primary',
+      '重新查询 🔄',
+    );
+    this.unmatchedRetryBtn.type = 'button';
+    this.unmatchedRetryBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.triggerRefresh();
+    });
+
+    this.actions.append(
+      this.steamLink,
+      this.steamDbLink,
+      this.metacriticLink,
+      this.unmatchedRetryBtn,
+    );
+
+    this.element.append(
+      header,
+      this.steamSection,
+      this.metascoreRow,
+      this.unmatchedSection,
+      this.actions,
+    );
+    document.body.append(this.element);
+
+    this.element.addEventListener('mouseenter', () => {
+      if (this.hideTimeout !== null) {
+        window.clearTimeout(this.hideTimeout);
+        this.hideTimeout = null;
+      }
+    });
+
+    this.element.addEventListener('mouseleave', () => {
+      this.hide();
+    });
+
+    window.addEventListener('scroll', () => this.hide(0), { passive: true });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.hide(0);
+    });
+  }
+
+  private triggerRefresh(): void {
+    const icon = this.refreshBtn.querySelector('.fwe-rating-popover__refresh-icon');
+    icon?.classList.add('fwe-spin');
+    this.refreshBtn.disabled = true;
+    this.unmatchedRetryBtn.disabled = true;
+    if (this.onRefreshCallback) {
+      this.onRefreshCallback();
+    }
+    this.hide(0);
+  }
+
+  private positionAt(anchor: HTMLElement): void {
+    this.element.style.removeProperty('display');
+    this.element.setAttribute('aria-hidden', 'false');
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const popoverRect = this.element.getBoundingClientRect();
+
+    let top = anchorRect.bottom + 8 + window.scrollY;
+    let left = anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2 + window.scrollX;
+
+    if (left + popoverRect.width > window.innerWidth + window.scrollX - 16) {
+      left = window.innerWidth + window.scrollX - popoverRect.width - 16;
+    }
+    if (left < window.scrollX + 16) {
+      left = window.scrollX + 16;
+    }
+
+    if (
+      anchorRect.bottom + popoverRect.height + 16 > window.innerHeight &&
+      anchorRect.top - popoverRect.height - 8 > 0
+    ) {
+      top = anchorRect.top - popoverRect.height - 8 + window.scrollY;
+    }
+
+    this.element.style.top = `${Math.round(top)}px`;
+    this.element.style.left = `${Math.round(left)}px`;
+    this.element.classList.add('fwe-rating-popover--visible');
+  }
+
+  show(anchor: HTMLElement, data: GameRatingData, onRefresh?: () => void): void {
+    if (this.hideTimeout !== null) {
+      window.clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
+    }
+    this.currentAnchor = anchor;
+    this.onRefreshCallback = onRefresh ?? null;
+    this.refreshBtn.disabled = false;
+    this.refreshBtn
+      .querySelector('.fwe-rating-popover__refresh-icon')
+      ?.classList.remove('fwe-spin');
+
+    // 显示已匹配视图
+    this.steamSection.style.removeProperty('display');
+    this.unmatchedSection.style.setProperty('display', 'none');
+    this.unmatchedRetryBtn.style.setProperty('display', 'none');
+
+    this.title.textContent = data.name;
+    this.appIdBadge.textContent = `AppID: ${data.appId}`;
+    this.scorePercent.textContent = `${data.positivePercent}%`;
+    this.scorePercent.className = `fwe-rating-popover__percent ${getRatingColorClass(data.positivePercent)}`;
+    this.scoreDesc.textContent = data.scoreDesc;
+
+    this.scoreBarFill.style.width = `${Math.max(5, Math.min(100, data.positivePercent))}%`;
+    this.scoreBarFill.className = `fwe-rating-popover__bar-fill ${getRatingColorClass(data.positivePercent)}`;
+
+    this.reviewsCount.textContent = `共 ${data.totalReviews.toLocaleString()} 篇玩家评测（${data.totalPositive.toLocaleString()} 好评 / ${data.totalNegative.toLocaleString()} 差评）`;
+
+    if (typeof data.metascore === 'number') {
+      this.metascoreRow.style.removeProperty('display');
+      this.metascoreValue.textContent = `${data.metascore}/100`;
+      this.metascoreValue.className = `fwe-rating-popover__meta-val ${getMetaColorClass(data.metascore)}`;
+      this.metacriticLink.style.removeProperty('display');
+      this.metacriticLink.href =
+        data.metacriticUrl || `https://www.metacritic.com/search/${encodeURIComponent(data.name)}/`;
+    } else {
+      this.metascoreRow.style.setProperty('display', 'none');
+      this.metacriticLink.style.setProperty('display', 'none');
+    }
+
+    this.steamLink.textContent = 'Steam 商店';
+    this.steamLink.href = data.steamUrl;
+    this.steamLink.style.removeProperty('display');
+
+    this.steamDbLink.textContent = 'SteamDB';
+    this.steamDbLink.href = data.steamDbUrl;
+    this.steamDbLink.style.removeProperty('display');
+
+    this.positionAt(anchor);
+  }
+
+  showUnmatched(anchor: HTMLElement, title: string, onRefresh?: () => void): void {
+    if (this.hideTimeout !== null) {
+      window.clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
+    }
+    this.currentAnchor = anchor;
+    this.onRefreshCallback = onRefresh ?? null;
+    this.refreshBtn.disabled = false;
+    this.unmatchedRetryBtn.disabled = false;
+    this.refreshBtn
+      .querySelector('.fwe-rating-popover__refresh-icon')
+      ?.classList.remove('fwe-spin');
+
+    // 隐藏匹配视图，显示未匹配视图
+    this.steamSection.style.setProperty('display', 'none');
+    this.metascoreRow.style.setProperty('display', 'none');
+    this.metacriticLink.style.setProperty('display', 'none');
+    this.unmatchedSection.style.removeProperty('display');
+    this.unmatchedRetryBtn.style.removeProperty('display');
+
+    const cleanTitle = cleanTitleBase(title);
+    this.title.textContent = cleanTitle || title;
+    this.appIdBadge.textContent = '未收录';
+
+    this.steamLink.textContent = 'Steam 搜索';
+    this.steamLink.href = `https://store.steampowered.com/search/?term=${encodeURIComponent(cleanTitle || title)}`;
+    this.steamLink.style.removeProperty('display');
+
+    this.steamDbLink.textContent = 'SteamDB 搜索';
+    this.steamDbLink.href = `https://steamdb.info/search/?a=app&q=${encodeURIComponent(cleanTitle || title)}`;
+    this.steamDbLink.style.removeProperty('display');
+
+    this.positionAt(anchor);
+  }
+
+  hide(delay = 180): void {
+    if (this.hideTimeout !== null) {
+      window.clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
+    }
+    if (delay === 0) {
+      this.element.classList.remove('fwe-rating-popover--visible');
+      this.element.style.setProperty('display', 'none');
+      this.element.setAttribute('aria-hidden', 'true');
+      this.currentAnchor = null;
+      return;
+    }
+    this.hideTimeout = window.setTimeout(() => {
+      this.element.classList.remove('fwe-rating-popover--visible');
+      this.element.style.setProperty('display', 'none');
+      this.element.setAttribute('aria-hidden', 'true');
+      this.currentAnchor = null;
+    }, delay);
+  }
+
+  destroy(): void {
+    if (this.hideTimeout !== null) {
+      window.clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
+    }
+    this.element.remove();
+  }
+}
+
+function renderLoadingBadge(container: HTMLElement): void {
+  container.innerHTML = '';
+  container.classList.remove('fwe-rating-container--empty');
+
+  const badge = element('div', 'fwe-rating-badge fwe-rating-badge--loading');
+  badge.setAttribute('aria-label', '正在加载游戏评分...');
+  badge.title = '正在查询 Steam 评分...';
+
+  const pill = element('span', 'fwe-rating-pill fwe-rating-pill--loading');
+  pill.append(createIcon('spinner', 'fwe-rating-icon fwe-spin'));
+  pill.append(element('span', 'fwe-rating-loading-text', '查询中...'));
+  badge.append(pill);
+  container.append(badge);
+}
+
+function renderUnmatchedBadge(
+  container: HTMLElement,
+  article: ParsedArticle,
+  popover: RatingPopover,
+  triggerRefresh: () => void,
+): void {
+  container.innerHTML = '';
+  container.classList.remove('fwe-rating-container--empty');
+
+  const badge = element('div', 'fwe-rating-badge fwe-rating-badge--unmatched');
+  badge.setAttribute('role', 'button');
+  badge.setAttribute('tabindex', '0');
+  badge.setAttribute('aria-label', `${article.title} 未收录评分，点击或悬浮查看详情`);
+  badge.title = '未在 Steam 自动匹配到评分，悬浮可查看详情或强制刷新';
+
+  const pill = element('span', 'fwe-rating-pill fwe-rating-pill--unmatched');
+  pill.append(createIcon('help', 'fwe-rating-icon fwe-rating-icon--unmatched'));
+  pill.append(element('span', 'fwe-rating-unmatched-text', '未收录'));
+  badge.append(pill);
+
+  badge.addEventListener('mouseenter', () => {
+    popover.showUnmatched(badge, article.title, triggerRefresh);
+  });
+  badge.addEventListener('mouseleave', () => {
+    popover.hide();
+  });
+  badge.addEventListener('click', (e) => {
+    e.stopPropagation();
+    popover.showUnmatched(badge, article.title, triggerRefresh);
+  });
+  badge.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      popover.showUnmatched(badge, article.title, triggerRefresh);
+    }
+  });
+
+  container.append(badge);
+}
+
+function renderSuccessBadge(
+  container: HTMLElement,
+  data: GameRatingData,
+  popover: RatingPopover,
+  triggerRefresh: () => void,
+): void {
+  container.innerHTML = '';
+  container.classList.remove('fwe-rating-container--empty');
+
+  const badge = element('div', 'fwe-rating-badge');
+  badge.setAttribute('role', 'button');
+  badge.setAttribute('tabindex', '0');
+  badge.setAttribute(
+    'aria-label',
+    `${data.name} 评分：Steam ${data.positivePercent}% ${data.scoreDesc}`,
+  );
+
+  const steamPill = element(
+    'span',
+    `fwe-rating-pill fwe-rating-pill--steam ${getRatingColorClass(data.positivePercent)}`,
+  );
+  steamPill.append(createIcon('steam', 'fwe-rating-icon'));
+  steamPill.append(element('span', 'fwe-rating-percent', `${data.positivePercent}%`));
+  badge.append(steamPill);
+
+  if (typeof data.metascore === 'number') {
+    const metaPill = element(
+      'span',
+      `fwe-rating-pill fwe-rating-pill--meta ${getMetaColorClass(data.metascore)}`,
+    );
+    metaPill.append(createIcon('metacritic', 'fwe-rating-icon-meta'));
+    metaPill.append(element('span', 'fwe-rating-metascore', String(data.metascore)));
+    badge.append(metaPill);
+  }
+
+  badge.addEventListener('mouseenter', () => {
+    popover.show(badge, data, triggerRefresh);
+  });
+  badge.addEventListener('mouseleave', () => {
+    popover.hide();
+  });
+
+  badge.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.open(data.steamUrl, '_blank', 'noopener,noreferrer');
+  });
+
+  badge.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(data.steamUrl, '_blank', 'noopener,noreferrer');
+    }
+  });
+
+  container.append(badge);
+}
+
+function updateDetailFactsWithRating(
+  article: ParsedArticle,
+  data: GameRatingData,
+  triggerRefresh?: () => void,
+): void {
+  const factsList = article.root.querySelector<HTMLElement>('.fwe-facts');
+  if (!factsList) return;
+
+  let item = factsList.querySelector<HTMLElement>('.fwe-fact--rating');
+  if (!item) {
+    item = element('div', 'fwe-fact fwe-fact--rating');
+    factsList.append(item);
+  }
+  item.innerHTML = '';
+
+  const term = element('dt', 'fwe-fact__label');
+  term.append(createIcon('star'), document.createTextNode('Rating'));
+  const description = element('dd', 'fwe-fact__value');
+
+  const steamLink = element(
+    'a',
+    'fwe-fact-link',
+    `Steam: ${data.positivePercent}% (${data.scoreDesc} · ${data.totalReviews.toLocaleString()} 评测)`,
+  );
+  steamLink.href = data.steamUrl;
+  steamLink.target = '_blank';
+  steamLink.rel = 'noopener noreferrer';
+  description.append(steamLink);
+
+  if (typeof data.metascore === 'number') {
+    description.append(document.createTextNode(' · '));
+    const metaLink = element('a', 'fwe-fact-link', `Metacritic: ${data.metascore}/100`);
+    metaLink.href = data.metacriticUrl || data.steamUrl;
+    metaLink.target = '_blank';
+    metaLink.rel = 'noopener noreferrer';
+    description.append(metaLink);
+  }
+
+  if (triggerRefresh) {
+    const refreshBtn = element('button', 'fwe-fact-refresh-btn');
+    refreshBtn.type = 'button';
+    refreshBtn.title = '强制刷新评分（清除缓存）';
+    refreshBtn.setAttribute('aria-label', '强制刷新评分');
+    refreshBtn.append(createIcon('refresh', 'fwe-fact-refresh-icon'));
+    refreshBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const icon = refreshBtn.querySelector('.fwe-fact-refresh-icon');
+      icon?.classList.add('fwe-spin');
+      refreshBtn.disabled = true;
+      triggerRefresh();
+    });
+    description.append(document.createTextNode(' '), refreshBtn);
+  }
+
+  item.append(term, description);
+}
+
+export async function loadRatingForBadge(
+  container: HTMLElement,
+  article: ParsedArticle,
+  popover: RatingPopover,
+  forceRefresh = false,
+): Promise<void> {
+  renderLoadingBadge(container);
+
+  const triggerRefresh = () => {
+    void loadRatingForBadge(container, article, popover, true);
+  };
+
+  try {
+    const data = await globalRatingQueue.add(() =>
+      getGameRating(article.title, article.root, forceRefresh),
+    );
+
+    if (!data) {
+      renderUnmatchedBadge(container, article, popover, triggerRefresh);
+      return;
+    }
+
+    renderSuccessBadge(container, data, popover, triggerRefresh);
+
+    if (article.pageKind === 'single') {
+      updateDetailFactsWithRating(article, data, triggerRefresh);
+    }
+  } catch {
+    renderUnmatchedBadge(container, article, popover, triggerRefresh);
+  }
+}
+
+function createRatingBadge(
+  article: ParsedArticle,
+  popover: RatingPopover,
+  ratingObserver: IntersectionObserver | null,
+): HTMLElement {
+  const container = element('div', 'fwe-rating-container');
+  renderLoadingBadge(container);
+
+  container.dataset.title = article.title;
+
+  if (ratingObserver) {
+    ratingObserver.observe(container);
+  } else {
+    void loadRatingForBadge(container, article, popover);
+  }
+
+  return container;
+}
+
+function addArticleMeta(
+  article: ParsedArticle,
+  transaction: DomTransaction,
+  popover?: RatingPopover,
+  ratingObserver?: IntersectionObserver | null,
+): void {
   const header = article.header;
   if (!header || header.querySelector('.fwe-article-meta')) return;
   const timeNode = header.querySelector<HTMLTimeElement>('time');
@@ -989,15 +1532,27 @@ function addArticleMeta(article: ParsedArticle, transaction: DomTransaction): vo
   meta.append(createIcon('calendar'), document.createTextNode(displayDateText));
   transaction.insert(meta, header);
 
-  // 在标题行右侧注入相对发布时间徽章
+  // 在标题行右侧注入评分徽章与相对发布时间徽章
   const title = header.querySelector<HTMLElement>('.entry-title');
-  if (title && !header.querySelector('.fwe-time-ago')) {
+  if (title && !header.querySelector('.fwe-header-right')) {
     const parsedDate = parseArticleDate(originalDate, header);
     let timeText = displayDateText;
     if (parsedDate) {
       timeText = formatRelativeTime(parsedDate);
     }
     const rightBox = element('div', 'fwe-header-right');
+
+    if (popover && article.kind === 'game') {
+      const ratingContainer = createRatingBadge(article, popover, ratingObserver ?? null);
+      rightBox.append(ratingContainer);
+    }
+
+    if (article.hasPinkPawAward) {
+      const pawBadge = element('span', 'fwe-paw-badge', '🐾 Pink Paw');
+      pawBadge.title = 'FitGirl Personal Pink Paw Award';
+      rightBox.append(pawBadge);
+    }
+
     const timeBadge = element('span', 'fwe-time-ago', timeText);
     rightBox.append(timeBadge);
     transaction.insert(rightBox, header);
@@ -1020,6 +1575,8 @@ function transformGame(
   mediaExpanded: boolean = true,
   lightbox?: ImageLightbox,
   gameModal?: GameDetailModal,
+  ratingPopover?: RatingPopover,
+  ratingObserver?: IntersectionObserver | null,
 ): void {
   if (!article.entry || article.root.hasAttribute('data-fwe-ready')) return;
   transaction.setAttribute(article.root, 'data-fwe-ready', 'true');
@@ -1029,11 +1586,14 @@ function transformGame(
   );
   const isSearch = document.body.classList.contains('search-results');
   if (isSearch) transaction.addClass(article.root, 'fwe-search-card');
-  addArticleMeta(article, transaction);
+  addArticleMeta(article, transaction, ratingPopover, ratingObserver);
   if (isSearch) hideSearchSource(article, transaction);
   else {
     if (article.infoBlock) transaction.addClass(article.infoBlock, 'fwe-source-hidden');
     if (article.repackHeading) transaction.addClass(article.repackHeading, 'fwe-source-hidden');
+    article.wrapperContainers?.forEach((wrapper) => {
+      transaction.addClass(wrapper, 'fwe-source-hidden');
+    });
   }
 
   const isDetail = article.pageKind === 'single';
@@ -1174,9 +1734,13 @@ function transformSpecial(article: ParsedArticle, transaction: DomTransaction): 
   } else if (title === 'popular repacks') {
     transaction.addClass(article.root, 'fwe-directory-popular');
     preparePopularDirectory(article, transaction);
-  } else if (/all my repacks.*a.?z/i.test(article.title))
+  } else if (
+    /all my repacks.*a.?z/i.test(article.title) ||
+    /pink paw award/i.test(article.title) ||
+    Boolean(article.entry?.querySelector('.lcp_catlist'))
+  ) {
     transaction.addClass(article.root, 'fwe-directory-az');
-  else if (title === 'updates list') {
+  } else if (title === 'updates list') {
     transaction.addClass(article.root, 'fwe-directory-updates');
     transformLegacySpoilers(article, transaction);
   }
@@ -1301,10 +1865,12 @@ export class FitGirlEnhancedApp {
   private mode: LayoutMode;
   private mediaExpanded: boolean;
   private infiniteScroll: boolean;
+  private showRatings: boolean;
   private transaction: DomTransaction | null = null;
   private observer: MutationObserver | null = null;
   private videoObserver: IntersectionObserver | null = null;
   private infiniteObserver: IntersectionObserver | null = null;
+  private ratingObserver: IntersectionObserver | null = null;
   private processing = false;
   private loadingNextPage = false;
   private hasNextPage = true;
@@ -1313,6 +1879,7 @@ export class FitGirlEnhancedApp {
   private readonly switchButton: HTMLButtonElement;
   private readonly mediaSwitchButton: HTMLButtonElement;
   private readonly infiniteSwitchButton: HTMLButtonElement;
+  private readonly ratingSwitchButton: HTMLButtonElement;
   private readonly popularButton: HTMLButtonElement;
   private readonly browseButton: HTMLButtonElement;
   private readonly popularDialog: HTMLDialogElement;
@@ -1320,6 +1887,7 @@ export class FitGirlEnhancedApp {
   private readonly searchForm: HTMLFormElement;
   private readonly lightbox: ImageLightbox;
   private readonly gameModal: GameDetailModal;
+  private readonly ratingPopover: RatingPopover;
   private readonly hasPopularItems: boolean;
   private lastDialogTrigger: HTMLElement | null = null;
   private activeColCount = 2;
@@ -1329,8 +1897,10 @@ export class FitGirlEnhancedApp {
     this.mode = getFastStoredLayoutMode();
     this.mediaExpanded = getFastStoredMediaExpand();
     this.infiniteScroll = getFastStoredInfiniteScroll();
+    this.showRatings = getFastStoredShowRatings();
     this.lightbox = new ImageLightbox();
     this.gameModal = new GameDetailModal();
+    this.ratingPopover = new RatingPopover();
 
     const popularItems = parsePopularItems(document.querySelector('#block-2'));
     this.hasPopularItems = popularItems.length > 0;
@@ -1383,12 +1953,22 @@ export class FitGirlEnhancedApp {
     this.infiniteSwitchButton.append(element('span', 'fwe-switch__thumb'));
     infiniteRow.append(this.infiniteSwitchButton);
 
-    panel.append(layoutRow, mediaRow, infiniteRow);
+    const ratingRow = element('div', 'fwe-view-control__row');
+    ratingRow.append(element('span', 'fwe-view-control__label', 'Show Game Ratings'));
+    this.ratingSwitchButton = element('button', 'fwe-switch');
+    this.ratingSwitchButton.type = 'button';
+    this.ratingSwitchButton.setAttribute('role', 'switch');
+    this.ratingSwitchButton.setAttribute('aria-label', '切换游戏评分显示');
+    this.ratingSwitchButton.append(element('span', 'fwe-switch__thumb'));
+    ratingRow.append(this.ratingSwitchButton);
+
+    panel.append(layoutRow, mediaRow, infiniteRow, ratingRow);
     this.viewControl.append(viewSummary, panel);
     this.mountControls();
     this.applyMode(this.mode);
     this.applyMediaExpand(this.mediaExpanded);
     this.applyInfiniteScroll(this.infiniteScroll);
+    this.applyShowRatings(this.showRatings);
 
     this.switchButton.addEventListener(
       'click',
@@ -1401,6 +1981,10 @@ export class FitGirlEnhancedApp {
     this.infiniteSwitchButton.addEventListener(
       'click',
       () => void this.setInfiniteScroll(!this.infiniteScroll),
+    );
+    this.ratingSwitchButton.addEventListener(
+      'click',
+      () => void this.setShowRatings(!this.showRatings),
     );
     this.popularButton.addEventListener('click', () =>
       this.openDialog(this.popularDialog, this.popularButton),
@@ -1418,10 +2002,11 @@ export class FitGirlEnhancedApp {
   }
 
   async start(): Promise<void> {
-    const [mode, mediaExpanded, infiniteScroll] = await Promise.all([
+    const [mode, mediaExpanded, infiniteScroll, showRatings] = await Promise.all([
       readStoredLayoutMode(),
       readStoredMediaExpand(),
       readStoredInfiniteScroll(),
+      readStoredShowRatings(),
     ]);
     if (this.mode !== mode) {
       this.mode = mode;
@@ -1434,6 +2019,10 @@ export class FitGirlEnhancedApp {
     if (this.infiniteScroll !== infiniteScroll) {
       this.infiniteScroll = infiniteScroll;
       this.applyInfiniteScroll(this.infiniteScroll);
+    }
+    if (this.showRatings !== showRatings) {
+      this.showRatings = showRatings;
+      this.applyShowRatings(this.showRatings);
     }
   }
 
@@ -1498,6 +2087,40 @@ export class FitGirlEnhancedApp {
     }
   }
 
+  private async setShowRatings(enabled: boolean): Promise<void> {
+    this.ratingSwitchButton.disabled = true;
+    await writeStoredShowRatings(enabled);
+    this.showRatings = enabled;
+    this.applyShowRatings(enabled);
+    this.ratingSwitchButton.disabled = false;
+  }
+
+  private applyShowRatings(enabled: boolean): void {
+    this.ratingSwitchButton.setAttribute('aria-checked', String(enabled));
+    document.documentElement.dataset.fweShowRatings = String(enabled);
+  }
+
+  private initRatingObserver(): void {
+    if (typeof IntersectionObserver !== 'function') return;
+    this.ratingObserver?.disconnect();
+    this.ratingObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const container = entry.target as HTMLElement;
+            this.ratingObserver?.unobserve(container);
+            const articleRoot = container.closest('article.hentry') as HTMLElement | null;
+            if (articleRoot) {
+              const article = parseArticle(articleRoot, detectPageKind());
+              void loadRatingForBadge(container, article, this.ratingPopover);
+            }
+          }
+        }
+      },
+      { rootMargin: '300px 0px' },
+    );
+  }
+
   private applyMode(mode: LayoutMode): void {
     if (this.transaction) this.disableEnhanced();
     this.mode = mode;
@@ -1541,6 +2164,7 @@ export class FitGirlEnhancedApp {
     document.querySelectorAll<HTMLElement>('.widget_archive').forEach((widget) => {
       this.transaction?.addClass(widget, 'fwe-source-hidden');
     });
+    this.initRatingObserver();
     this.prepareNavigation();
     this.processArticles();
     this.observeChanges();
@@ -1554,6 +2178,9 @@ export class FitGirlEnhancedApp {
     }
     this.lightbox.close();
     this.gameModal.close();
+    this.ratingObserver?.disconnect();
+    this.ratingObserver = null;
+    this.ratingPopover.hide(0);
     this.observer?.disconnect();
     this.observer = null;
     this.videoObserver?.disconnect();
@@ -1620,6 +2247,8 @@ export class FitGirlEnhancedApp {
             this.mediaExpanded,
             this.lightbox,
             this.gameModal,
+            this.ratingPopover,
+            this.ratingObserver,
           );
         } else if (article.kind === 'upcoming') {
           transformUpcoming(article, this.transaction);

@@ -15,7 +15,14 @@ import {
   readLayoutMode,
   STORAGE_KEY,
 } from '../src/dom';
-import { archiveWidget, gameArticle, popularWidget, siteHeader, specialArticle } from './fixtures';
+import {
+  archiveWidget,
+  gameArticle,
+  pinkPawGameArticle,
+  popularWidget,
+  siteHeader,
+  specialArticle,
+} from './fixtures';
 
 function mount(markup: string): void {
   document.body.innerHTML = markup;
@@ -34,6 +41,23 @@ describe('DOM 解析', () => {
     expect(parsed.sections.get('downloads')?.nodes).toHaveLength(4);
     expect(parsed.media).toHaveLength(4);
     expect(parsed.media.at(-1)?.video).toBeInstanceOf(HTMLVideoElement);
+  });
+
+  it('正确穿透解析带 Pink Paw 包装层的文章、识别奖项并提取全部区段', () => {
+    mount(pinkPawGameArticle);
+    const root = document.querySelector('article') as HTMLElement;
+    const parsed = parseArticle(root, 'single');
+    expect(parsed.kind).toBe('game');
+    expect(parsed.hasPinkPawAward).toBe(true);
+    expect(parsed.cover?.alt).toBe('The Alters cover');
+    expect(parsed.infoBlock?.tagName).toBe('P');
+    expect(parsed.repackHeading?.textContent).toContain('The Alters: Deluxe Edition');
+    expect(parsed.sections.get('downloads')?.nodes).toHaveLength(4);
+    expect(parsed.sections.get('screenshots')?.nodes).toHaveLength(2);
+    expect(parsed.media).toHaveLength(2);
+    expect(parsed.sections.get('features')?.nodes).toHaveLength(2);
+    expect(parsed.sections.get('description')?.nodes).toHaveLength(1);
+    expect(parsed.wrapperContainers).toHaveLength(1);
   });
 
   it('无法解析的特殊文章保持为保守类型', () => {

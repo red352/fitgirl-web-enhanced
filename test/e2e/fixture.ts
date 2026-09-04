@@ -3,6 +3,7 @@ import {
   digestArticle,
   fullPage,
   gameArticle,
+  pinkPawGameArticle,
   popularPageArticle,
   popularWidget,
   siteHeader,
@@ -12,6 +13,10 @@ import {
 const view = new URLSearchParams(window.location.search).get('page') ?? 'home';
 const pageMarkup: Record<string, { bodyClass: string; content: string }> = {
   single: { bodyClass: 'single single-post', content: gameArticle },
+  pink: {
+    bodyClass: 'single single-post category-lossless-repack category-pink-paw-award',
+    content: pinkPawGameArticle,
+  },
   digest: { bodyClass: 'single single-post category-updates-digest', content: digestArticle },
   popular: { bodyClass: 'page page-template-default', content: popularPageArticle },
   az: { bodyClass: 'page page-template-default', content: azPageArticle },
@@ -40,13 +45,18 @@ const assets = [
   '/test/e2e/assets/shot-2.svg',
   '/test/e2e/assets/shot-3.svg',
 ];
-document.querySelectorAll<HTMLImageElement>('.game-info img').forEach((image) => {
-  image.src = assets[0] ?? '';
-});
 document
-  .querySelectorAll<HTMLImageElement>('.entry-content a img, .entry-summary a img')
-  .forEach((image, index) => {
-    image.src = assets[(index % 3) + 1] ?? assets[1] ?? '';
+  .querySelectorAll<HTMLImageElement>('.game-info img, a[href*="cover"] img')
+  .forEach((image) => {
+    image.src = assets[0] ?? '';
+  });
+document
+  .querySelectorAll<HTMLAnchorElement>('.entry-content a:has(img), .entry-summary a:has(img)')
+  .forEach((anchor, index) => {
+    const asset = assets[(index % 3) + 1] ?? assets[1] ?? '';
+    anchor.href = asset;
+    const img = anchor.querySelector('img');
+    if (img) img.src = asset;
   });
 document.querySelectorAll<HTMLImageElement>('#block-2 img').forEach((image, index) => {
   image.src = assets[(index % 3) + 1] ?? assets[1] ?? '';

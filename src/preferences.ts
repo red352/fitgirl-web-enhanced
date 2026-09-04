@@ -4,13 +4,16 @@ import type {
   StoredInfiniteScrollPreference,
   StoredLayoutPreference,
   StoredMediaPreference,
+  StoredShowRatingsPreference,
 } from './types';
 
 export const MEDIA_EXPAND_STORAGE_KEY = 'fitgirl-web-enhanced:v1:media-expand';
 export const INFINITE_SCROLL_STORAGE_KEY = 'fitgirl-web-enhanced:v1:infinite-scroll';
+export const SHOW_RATINGS_STORAGE_KEY = 'fitgirl-web-enhanced:v1:show-ratings';
 const TIMESTAMP_KEY = `${STORAGE_KEY}:updated-at`;
 const MEDIA_TIMESTAMP_KEY = `${MEDIA_EXPAND_STORAGE_KEY}:updated-at`;
 const INFINITE_SCROLL_TIMESTAMP_KEY = `${INFINITE_SCROLL_STORAGE_KEY}:updated-at`;
+const SHOW_RATINGS_TIMESTAMP_KEY = `${SHOW_RATINGS_STORAGE_KEY}:updated-at`;
 const DATABASE_NAME = 'fitgirl-web-enhanced';
 const STORE_NAME = 'preferences';
 
@@ -39,6 +42,18 @@ function asInfiniteScrollPreference(
   enabled: string | null,
   updatedAt: string | null,
 ): StoredInfiniteScrollPreference | null {
+  if (enabled !== 'true' && enabled !== 'false') return null;
+  const timestamp = Number(updatedAt);
+  return {
+    enabled: enabled === 'true',
+    updatedAt: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0,
+  };
+}
+
+function asShowRatingsPreference(
+  enabled: string | null,
+  updatedAt: string | null,
+): StoredShowRatingsPreference | null {
   if (enabled !== 'true' && enabled !== 'false') return null;
   const timestamp = Number(updatedAt);
   return {
@@ -102,6 +117,26 @@ function writeLocalInfiniteScroll(value: StoredInfiniteScrollPreference): void {
   try {
     window.localStorage.setItem(INFINITE_SCROLL_STORAGE_KEY, String(value.enabled));
     window.localStorage.setItem(INFINITE_SCROLL_TIMESTAMP_KEY, String(value.updatedAt));
+  } catch {
+    // 同源存储被禁用时，IndexedDB 仍可作为回退。
+  }
+}
+
+function readLocalShowRatings(): StoredShowRatingsPreference | null {
+  try {
+    return asShowRatingsPreference(
+      window.localStorage.getItem(SHOW_RATINGS_STORAGE_KEY),
+      window.localStorage.getItem(SHOW_RATINGS_TIMESTAMP_KEY),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalShowRatings(value: StoredShowRatingsPreference): void {
+  try {
+    window.localStorage.setItem(SHOW_RATINGS_STORAGE_KEY, String(value.enabled));
+    window.localStorage.setItem(SHOW_RATINGS_TIMESTAMP_KEY, String(value.updatedAt));
   } catch {
     // 同源存储被禁用时，IndexedDB 仍可作为回退。
   }
@@ -286,6 +321,59 @@ async function writeIndexedInfiniteScroll(value: StoredInfiniteScrollPreference)
   });
 }
 
+async function readIndexedShowRatings(): Promise<StoredShowRatingsPreference | null> {
+  const database = await openDatabase();
+  if (!database) return null;
+  return new Promise((resolve) => {
+    try {
+      const transaction = database.transaction(STORE_NAME, 'readonly');
+      const request = transaction.objectStore(STORE_NAME).get(SHOW_RATINGS_STORAGE_KEY);
+      request.onsuccess = () => {
+        const value = request.result as Partial<StoredShowRatingsPreference> | undefined;
+        database.close();
+        resolve(
+          value && typeof value.enabled === 'boolean' && Number.isFinite(value.updatedAt)
+            ? { enabled: value.enabled, updatedAt: value.updatedAt ?? 0 }
+            : null,
+        );
+      };
+      request.onerror = () => {
+        database.close();
+        resolve(null);
+      };
+    } catch {
+      database.close();
+      resolve(null);
+    }
+  });
+}
+
+async function writeIndexedShowRatings(value: StoredShowRatingsPreference): Promise<void> {
+  const database = await openDatabase();
+  if (!database) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const transaction = database.transaction(STORE_NAME, 'readwrite');
+      transaction.objectStore(STORE_NAME).put(value, SHOW_RATINGS_STORAGE_KEY);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onabort = () => {
+        database.close();
+        resolve();
+      };
+    } catch {
+      database.close();
+      resolve();
+    }
+  });
+}
+
 export function getFastStoredLayoutMode(): LayoutMode {
   const local = readLocal();
   return local ? local.mode : 'enhanced';
@@ -356,4 +444,29 @@ export async function writeStoredInfiniteScroll(enabled: boolean): Promise<void>
   const value = { enabled, updatedAt: Date.now() } satisfies StoredInfiniteScrollPreference;
   writeLocalInfiniteScroll(value);
   await writeIndexedInfiniteScroll(value);
+}
+
+export function getFastStoredShowRatings(): boolean {
+  const local = readLocalShowRatings();
+  return local ? local.enabled : true;
+}
+
+export async function readStoredShowRatings(): Promise<boolean> {
+  const [local, indexed] = await Promise.all([
+    Promise.resolve(readLocalShowRatings()),
+    readIndexedShowRatings(),
+  ]);
+  const selected = [local, indexed]
+    .filter((value): value is StoredShowRatingsPreference => value !== null)
+    .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+  if (!selected) return true;
+  if (!local || local.enabled !== selected.enabled || local.updatedAt !== selected.updatedAt)
+    writeLocalShowRatings(selected);
+  return selected.enabled;
+}
+
+export async function writeStoredShowRatings(enabled: boolean): Promise<void> {
+  const value = { enabled, updatedAt: Date.now() } satisfies StoredShowRatingsPreference;
+  writeLocalShowRatings(value);
+  await writeIndexedShowRatings(value);
 }

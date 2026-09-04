@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import monkey from 'vite-plugin-monkey';
+import pkg from './package.json' with { type: 'json' };
 
 const repository = 'https://github.com/red352/fitgirl-web-enhanced';
 const distribution =
@@ -12,13 +13,14 @@ export default defineConfig({
       userscript: {
         name: 'FitGirl Web Enhanced',
         namespace: repository,
-        version: '1.4.1',
-        description: '优化 FitGirl Repacks 的信息密度、宽屏布局、折叠内容与热门榜单。',
-        author: 'red352',
-        license: 'MIT',
+        version: pkg.version,
+        description: pkg.description,
+        author: pkg.author,
+        license: pkg.license,
         match: ['https://fitgirl-repacks.site/*'],
         'run-at': 'document-start',
-        grant: 'none',
+        grant: ['GM_xmlhttpRequest', 'GM_getValue', 'GM_setValue'],
+        connect: ['store.steampowered.com'],
         noframes: true,
         homepageURL: repository,
         supportURL: `${repository}/issues`,

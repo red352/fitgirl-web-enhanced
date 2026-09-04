@@ -1,5 +1,5 @@
 import './style.css';
-import { getFastStoredLayoutMode } from './preferences';
+import { getFastStoredLayoutMode, getFastStoredShowRatings } from './preferences';
 import { FitGirlEnhancedApp } from './ui';
 
 // 在 document-start 阶段执行同步 Fast-Path 标记，消除原版页面未样式化闪现 (FOUC)
@@ -8,8 +8,11 @@ function syncPreloadState(): void {
   try {
     const fastMode = getFastStoredLayoutMode();
     document.documentElement.dataset.fweMode = fastMode;
+    const fastRatings = getFastStoredShowRatings();
+    document.documentElement.dataset.fweShowRatings = String(fastRatings);
   } catch {
     document.documentElement.dataset.fweMode = 'enhanced';
+    document.documentElement.dataset.fweShowRatings = 'true';
   }
 }
 

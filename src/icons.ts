@@ -24,6 +24,15 @@ const paths: Record<string, string> = {
   building: '<path d="M5 21V6l7-3 7 3v15M9 8h1m4 0h1M9 12h1m4 0h1M9 16h1m4 0h1M3 21h18"/>',
   language: '<path d="M4 5h9M8.5 3v2c0 5-2 8-5 10m3-6c1 2 3 4 6 5M14 19l3.5-9 3.5 9m-5.8-3h4.6"/>',
   drive: '<path d="M5 5h14l2 10H3zM3 15v4h18v-4M17 17h.01"/>',
+  steam:
+    '<path d="M12 2a10 10 0 0 0-10 9.5 10 10 0 0 0 6.6 9.4l3.1-4.3a3.5 3.5 0 0 1-.2-1.1c0-1.9 1.6-3.5 3.5-3.5.3 0 .6 0 .9.1l2.4-3.5A5.5 5.5 0 0 0 12 8a5.5 5.5 0 0 0-5.5 5.5c0 .3 0 .6.1.9L2.3 12A10 10 0 0 0 12 22a10 10 0 0 0 10-10A10 10 0 0 0 12 2z"/>',
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  thumbUp:
+    '<path d="M7 10v12M15 10.5a3 3 0 0 0-3-3l.5-4a1.5 1.5 0 0 0-2.5-1.2L7 7v15h11a2 2 0 0 0 2-1.7l1.3-7.5A2 2 0 0 0 19.3 10.5H15zM2 10h5v12H2z"/>',
+  metacritic: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 15V9l4 4 4-4v6"/>',
+  refresh:
+    '<path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>',
+  spinner: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
 };
 
 export function createIcon(name: keyof typeof paths, className = ''): SVGSVGElement {

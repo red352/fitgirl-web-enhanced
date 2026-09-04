@@ -122,9 +122,50 @@ export function extractFacts(infoBlock: Element | null): GameFact[] {
   return candidates.filter((fact) => fact.value || fact.links.length > 0);
 }
 
-function findInfoBlock(entry: HTMLElement): HTMLElement | null {
+/**
+ * 穿透检测内容包装层（如 FitGirl Pink Paw 装饰 div、自定义分节包装等），
+ * 返回文章内容真实展平的块级子元素序列与包装容器引用。
+ */
+export function getEntryContentNodes(entry: HTMLElement): {
+  nodes: HTMLElement[];
+  wrappers: HTMLElement[];
+} {
+  const wrappers: HTMLElement[] = [];
+
+  function flatten(elements: HTMLElement[]): HTMLElement[] {
+    const result: HTMLElement[] = [];
+    for (const el of elements) {
+      if (
+        el.tagName === 'DIV' &&
+        !el.matches(
+          '.su-spoiler, .fwe-game-layout, .fwe-detail-sections, .fwe-card-payload, .fwe-description-shell',
+        ) &&
+        (el.querySelector('h2, h3, h4') ||
+          /(?:Genres\/Tags|Original Size|Repack Size)/i.test(el.textContent ?? ''))
+      ) {
+        const subElements = [...el.children].filter(
+          (c): c is HTMLElement => c instanceof HTMLElement,
+        );
+        if (subElements.length > 0 && (el.querySelector('h2, h3, h4') || subElements.length > 1)) {
+          wrappers.push(el);
+          result.push(...flatten(subElements));
+          continue;
+        }
+      }
+      result.push(el);
+    }
+    return result;
+  }
+
+  const directChildren = [...entry.children].filter(
+    (c): c is HTMLElement => c instanceof HTMLElement,
+  );
+  return { nodes: flatten(directChildren), wrappers };
+}
+
+function findInfoBlock(contentNodes: HTMLElement[]): HTMLElement | null {
   return (
-    [...entry.children].find(
+    contentNodes.find(
       (child): child is HTMLElement =>
         child instanceof HTMLElement &&
         /(?:Genres\/Tags|Original Size|Repack Size)/i.test(child.textContent ?? ''),
@@ -132,11 +173,12 @@ function findInfoBlock(entry: HTMLElement): HTMLElement | null {
   );
 }
 
-function collectSections(entry: HTMLElement): Map<SectionKind, ArticleSection> {
+function collectSections(
+  contentNodes: HTMLElement[],
+  entry: HTMLElement,
+): Map<SectionKind, ArticleSection> {
   const sections = new Map<SectionKind, ArticleSection>();
-  const children = [...entry.children].filter(
-    (child): child is HTMLElement => child instanceof HTMLElement,
-  );
+  const children = contentNodes;
 
   for (let index = 0; index < children.length; index += 1) {
     const child = children[index];
@@ -235,16 +277,26 @@ export function parseArticle(root: HTMLElement, pageKind: PageKind): ParsedArtic
     };
   }
 
-  const infoBlock = findInfoBlock(entry);
-  const sections = collectSections(entry);
+  const { nodes: contentNodes, wrappers } = getEntryContentNodes(entry);
+  const infoBlock = findInfoBlock(contentNodes);
+  const sections = collectSections(contentNodes, entry);
   const repackHeading =
-    [...entry.children].find(
+    contentNodes.find(
       (child): child is HTMLElement =>
         child instanceof HTMLElement &&
         /^H[2-4]$/.test(child.tagName) &&
         !classifySectionHeading(child),
     ) ?? null;
-  const cover = infoBlock?.querySelector<HTMLImageElement>('img') ?? null;
+  const cover =
+    infoBlock?.querySelector<HTMLImageElement>('img') ??
+    contentNodes
+      .find((el) => el.tagName === 'P' && el.querySelector('img'))
+      ?.querySelector<HTMLImageElement>('img') ??
+    null;
+
+  const hasPinkPawAward =
+    root.classList.contains('category-pink-paw-award') ||
+    Boolean(entry.querySelector('div[style*="paw.png"]'));
 
   return {
     root,
@@ -259,6 +311,8 @@ export function parseArticle(root: HTMLElement, pageKind: PageKind): ParsedArtic
     cover,
     sections,
     media: collectMedia(sections.get('screenshots')),
+    wrapperContainers: wrappers,
+    hasPinkPawAward,
   };
 }
 

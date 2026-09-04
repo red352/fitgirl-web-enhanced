@@ -125,6 +125,41 @@ export const siteHeader = `
   <button class="search-toggle">Search</button><div id="search-container"><form class="search-form"><input name="s"></form></div>
 </div></header>`;
 
+export const pinkPawGameArticle = `
+<article class="post-63640 post type-post status-publish format-standard hentry category-lossless-repack category-pink-paw-award">
+  <header class="entry-header">
+    <h1 class="entry-title"><a href="/the-alters/">The Alters: Deluxe Edition</a></h1>
+    <div class="entry-meta"><time class="entry-date">September 2, 2026</time></div>
+  </header>
+  <div class="entry-content">
+    <div style="background: url(https://fitgirl-repacks.site/wp-content/uploads/2022/08/paw.png) top right no-repeat">
+      <h3>#5771 The Alters: Deluxe Edition</h3>
+      <p style="height: 200px; display: block;">
+        <a href="https://example.com/cover"><img src="https://images.example/alters-cover.jpg" alt="The Alters cover"></a>
+        Genres/Tags: Adventure, Management<br>
+        Company: 11 bit studios<br>
+        Languages: ENG/MULTI12<br>
+        Original Size: 64.7 GB<br>
+        Repack Size: 43.6 GB
+      </p>
+      <h3>Download Mirrors (Direct Links)</h3>
+      <ul><li><a href="https://files.example/alters">Filehoster</a></li></ul>
+      <h3>Download Mirrors (Torrent)</h3>
+      <ul><li><a href="magnet:?xt=urn:btih:alters">Magnet</a></li></ul>
+      <h3>Screenshots (Click to enlarge)</h3>
+      <p>
+        <a href="https://images.example/alters-1.jpg"><img src="https://images.example/alters-1-thumb.jpg"></a>
+        <a href="https://images.example/alters-2.jpg"><img src="https://images.example/alters-2-thumb.jpg"></a>
+      </p>
+      <h3>Repack Features</h3>
+      <ul><li>Lossless repack</li><li>4 DLCs included</li></ul>
+      <div class="su-spoiler su-spoiler-closed"><div class="su-spoiler-title">Game Description</div><div class="su-spoiler-content">Survival on a hostile planet.</div></div>
+    </div>
+    <p><b>Backwards Compatibility</b></p>
+    <p>This repack is not backwards compatible.</p>
+  </div>
+</article>`;
+
 export const fullPage = `
 ${siteHeader}
 <div id="page"><main id="main"><div id="primary"><div id="content">${upcomingArticle}${gameArticle}${gameArticle.replaceAll('Sample Game', 'Second Game')}${specialArticle}</div></div></main>${popularWidget}${archiveWidget}</div>`;
