@@ -1,8 +1,9 @@
 import './style.css';
-import { getFastStoredLayoutMode, getFastStoredShowRatings } from './preferences';
+import { getFastStoredLanguage, getFastStoredLayoutMode, getFastStoredShowRatings } from './preferences';
+import { detectBrowserLanguage, setActiveLanguage } from './i18n';
 import { FitGirlEnhancedApp } from './ui';
 
-// 在 document-start 阶段执行同步 Fast-Path 标记，消除原版页面未样式化闪现 (FOUC)
+// Execute synchronous Fast-Path tagging at document-start to prevent Flash of Unstyled Content (FOUC)
 function syncPreloadState(): void {
   if (window.top !== window.self) return;
   try {
@@ -10,9 +11,13 @@ function syncPreloadState(): void {
     document.documentElement.dataset.fweMode = fastMode;
     const fastRatings = getFastStoredShowRatings();
     document.documentElement.dataset.fweShowRatings = String(fastRatings);
+    const fastLang = getFastStoredLanguage() ?? detectBrowserLanguage();
+    document.documentElement.dataset.fweLang = fastLang;
+    setActiveLanguage(fastLang);
   } catch {
     document.documentElement.dataset.fweMode = 'enhanced';
     document.documentElement.dataset.fweShowRatings = 'true';
+    document.documentElement.dataset.fweLang = 'en';
   }
 }
 
@@ -25,7 +30,7 @@ async function boot(): Promise<void> {
   try {
     await new FitGirlEnhancedApp().start();
   } catch (error) {
-    console.error('[FitGirl Web Enhanced] 初始化失败', error);
+    console.error('[FitGirl Web Enhanced] Initialization failed', error);
     document.documentElement.dataset.fweMode = 'original';
   }
 }

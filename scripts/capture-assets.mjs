@@ -21,6 +21,8 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({
   deviceScaleFactor: 1,
   colorScheme: 'light',
+  locale: 'en-US',
+  timezoneId: 'UTC',
 });
 
 const ratingSeed = {
@@ -29,7 +31,7 @@ const ratingSeed = {
       appId: 1091500,
       name: 'Cyberpunk 2077',
       positivePercent: 89,
-      scoreDesc: '特别好评',
+      scoreDesc: 'Very Positive',
       totalReviews: 658920,
       totalPositive: 586438,
       totalNegative: 72482,
@@ -45,7 +47,7 @@ const ratingSeed = {
       appId: 1091500,
       name: 'Cyberpunk 2077',
       positivePercent: 89,
-      scoreDesc: '特别好评',
+      scoreDesc: 'Very Positive',
       totalReviews: 658920,
       totalPositive: 586438,
       totalNegative: 72482,
@@ -61,7 +63,7 @@ const ratingSeed = {
       appId: 1245620,
       name: 'ELDEN RING',
       positivePercent: 93,
-      scoreDesc: '特别好评',
+      scoreDesc: 'Very Positive',
       totalReviews: 842100,
       totalPositive: 783153,
       totalNegative: 58947,
@@ -76,7 +78,7 @@ const ratingSeed = {
       appId: 1601570,
       name: 'The Alters',
       positivePercent: 91,
-      scoreDesc: '特别好评',
+      scoreDesc: 'Very Positive',
       totalReviews: 14850,
       totalPositive: 13513,
       totalNegative: 1337,
@@ -89,6 +91,7 @@ const ratingSeed = {
 };
 
 await context.addInitScript((seed) => {
+  globalThis.localStorage.setItem('fitgirl-web-enhanced:v1:language', 'en');
   for (const [key, val] of Object.entries(seed)) {
     globalThis.localStorage.setItem(key, JSON.stringify(val));
   }
@@ -107,7 +110,7 @@ const disableAnimations = async () => {
   });
 };
 
-// 1. 桌面浏览页 (Desktop Listing)
+// 1. Desktop Listing View
 console.log('Capturing listing-desktop.png...');
 await page.setViewportSize({ width: 1440, height: 1000 });
 await page.goto('http://127.0.0.1:4178/test/e2e/');
@@ -120,7 +123,7 @@ await page.screenshot({
   animations: 'disabled',
 });
 
-// 2. 移动端浏览页 (Mobile Listing)
+// 2. Mobile Listing View
 console.log('Capturing listing-mobile.png...');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.goto('http://127.0.0.1:4178/test/e2e/');
@@ -134,7 +137,7 @@ await page.screenshot({
   animations: 'disabled',
 });
 
-// 3. Steam 游戏评分与评测详情浮层 (Steam Rating Popover)
+// 3. Steam Rating & Review Popover
 console.log('Capturing rating-popover.png...');
 await page.setViewportSize({ width: 1440, height: 900 });
 await page.goto('http://127.0.0.1:4178/test/e2e/');
@@ -148,7 +151,7 @@ await page.screenshot({
   animations: 'disabled',
 });
 
-// 4. 桌面详情页 (Desktop Detail)
+// 4. Desktop Detail View
 console.log('Capturing detail-desktop.png...');
 await page.setViewportSize({ width: 1440, height: 1000 });
 await page.goto('http://127.0.0.1:4178/test/e2e/?page=single');
@@ -161,7 +164,7 @@ await page.screenshot({
   animations: 'disabled',
 });
 
-// 5. Pink Paw Award 荣誉游戏详情页 (Pink Paw Award Detail)
+// 5. Pink Paw Award Detail View
 console.log('Capturing pink-paw-desktop.png...');
 await page.setViewportSize({ width: 1440, height: 1000 });
 await page.goto('http://127.0.0.1:4178/test/e2e/?page=pink');
@@ -173,7 +176,7 @@ await page.screenshot({
   animations: 'disabled',
 });
 
-// 6. 移动端热门榜单抽屉 (Mobile Popular Sheet)
+// 6. Mobile Popular Drawer
 console.log('Capturing popular-mobile.png...');
 await page.setViewportSize({ width: 390, height: 844 });
 await page.goto('http://127.0.0.1:4178/test/e2e/');
@@ -187,7 +190,7 @@ await page.screenshot({
   animations: 'disabled',
 });
 
-// 7. 桌面多媒体交互灯箱 (Desktop Lightbox)
+// 7. Desktop Interactive Lightbox
 console.log('Capturing lightbox-desktop.png...');
 await page.setViewportSize({ width: 1440, height: 1000 });
 await page.goto('http://127.0.0.1:4178/test/e2e/');
@@ -203,7 +206,7 @@ await page.screenshot({
   animations: 'disabled',
 });
 
-// 8. 桌面卡片快捷模态弹窗 (Desktop Card Detail Modal)
+// 8. Desktop Card Detail Modal
 console.log('Capturing modal-desktop.png...');
 await page.setViewportSize({ width: 1440, height: 1000 });
 await page.goto('http://127.0.0.1:4178/test/e2e/');

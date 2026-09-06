@@ -12,20 +12,29 @@ import {
   parseUpcomingItems,
 } from './dom';
 import {
+  detectBrowserLanguage,
+  getActiveLanguage,
+  setActiveLanguage,
+  t,
+} from './i18n';
+import {
   getFastStoredInfiniteScroll,
+  getFastStoredLanguage,
   getFastStoredLayoutMode,
   getFastStoredMediaExpand,
   getFastStoredShowRatings,
   readStoredInfiniteScroll,
+  readStoredLanguage,
   readStoredLayoutMode,
   readStoredMediaExpand,
   readStoredShowRatings,
   writeStoredInfiniteScroll,
+  writeStoredLanguage,
   writeStoredLayoutMode,
   writeStoredMediaExpand,
   writeStoredShowRatings,
 } from './preferences';
-import { cleanTitleBase, getGameRating, globalRatingQueue } from './rating';
+import { cleanTitleBase, getGameRating, globalRatingQueue, translateScoreDesc } from './rating';
 import type {
   ArchiveGroup,
   ArticleKind,
@@ -35,6 +44,7 @@ import type {
   NavigationItem,
   ParsedArticle,
   PopularItem,
+  SupportedLanguage,
 } from './types';
 
 const FACT_ICONS = {
@@ -113,7 +123,7 @@ export class GameDetailModal {
 
   constructor() {
     this.dialog = element('dialog', 'fwe-game-dialog');
-    this.dialog.setAttribute('aria-label', 'Game Details');
+    this.dialog.setAttribute('aria-label', t('gameModalAria'));
 
     const panel = element('div', 'fwe-game-dialog__panel');
     const header = element('header', 'fwe-game-dialog__header');
@@ -126,7 +136,7 @@ export class GameDetailModal {
 
     const closeBtn = element('button', 'fwe-icon-button fwe-game-dialog__close');
     closeBtn.type = 'button';
-    closeBtn.setAttribute('aria-label', 'Close dialog (Esc)');
+    closeBtn.setAttribute('aria-label', t('gameModalCloseAria'));
     closeBtn.append(createIcon('close'));
     closeBtn.addEventListener('click', () => this.close());
     titleRow.append(heading, closeBtn);
@@ -140,7 +150,7 @@ export class GameDetailModal {
     panel.append(header, this.body);
     this.dialog.append(panel);
 
-    // 严谨的防误触遮罩点击关闭
+    // Robust backdrop click handler to prevent accidental dismissals
     this.dialog.addEventListener('mousedown', (e) => {
       this.isBackdropMouseDown = e.target === this.dialog;
     });
@@ -208,9 +218,9 @@ export class GameDetailModal {
       this.tabPanes.set(kind, pane);
 
       const labelMap = {
-        downloads: 'Download Mirrors',
-        features: 'Repack Features',
-        description: 'Game Description',
+        downloads: t('cardMirrors'),
+        features: t('cardFeatures'),
+        description: t('cardDescription'),
       };
       const iconMap = {
         downloads: 'download' as const,
@@ -281,6 +291,20 @@ export class GameDetailModal {
     }
   }
 
+  public updateLanguage(): void {
+    this.dialog.setAttribute('aria-label', t('gameModalAria'));
+    const closeBtn = this.dialog.querySelector<HTMLButtonElement>('.fwe-game-dialog__close');
+    if (closeBtn) closeBtn.setAttribute('aria-label', t('gameModalCloseAria'));
+    this.tabButtons.forEach((btn, kind) => {
+      const span = btn.querySelector('span');
+      if (span) {
+        if (kind === 'downloads') span.textContent = t('cardMirrors');
+        else if (kind === 'features') span.textContent = t('cardFeatures');
+        else if (kind === 'description') span.textContent = t('cardDescription');
+      }
+    });
+  }
+
   public destroy(): void {
     this.close();
     this.dialog.remove();
@@ -326,6 +350,7 @@ function createCardPayload(article: ParsedArticle, transaction: DomTransaction):
         transformDirectLinksSpoilers(pane, transaction);
       }
     }
+
     payload.append(pane);
   });
 
@@ -356,7 +381,8 @@ function createCardActions(
   if (downloads) {
     const btn = element('button', 'fwe-card-btn fwe-card-btn--primary');
     btn.type = 'button';
-    btn.append(createIcon('download'), element('span', '', 'Download Mirrors'));
+    btn.setAttribute('data-fwe-toggle', `${article.root.id}-mirrors`);
+    btn.append(createIcon('download'), element('span', '', t('cardMirrors')));
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       openTab('downloads', btn);
@@ -367,7 +393,8 @@ function createCardActions(
   if (features) {
     const btn = element('button', 'fwe-card-btn');
     btn.type = 'button';
-    btn.append(createIcon('features'), element('span', '', 'Features'));
+    btn.setAttribute('data-fwe-toggle', `${article.root.id}-features`);
+    btn.append(createIcon('features'), element('span', '', t('cardFeatures')));
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       openTab('features', btn);
@@ -378,7 +405,8 @@ function createCardActions(
   if (description) {
     const btn = element('button', 'fwe-card-btn');
     btn.type = 'button';
-    btn.append(createIcon('description'), element('span', '', 'Description'));
+    btn.setAttribute('data-fwe-toggle', `${article.root.id}-desc`);
+    btn.append(createIcon('description'), element('span', '', t('cardDescription')));
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       openTab('description', btn);
@@ -397,9 +425,9 @@ function createDetailSections(article: ParsedArticle, transaction: DomTransactio
     label: string;
     icon: 'download' | 'features' | 'description';
   }> = [
-    { kind: 'downloads', label: 'Download Mirrors', icon: 'download' },
-    { kind: 'features', label: 'Repack Features', icon: 'features' },
-    { kind: 'description', label: 'Game Description', icon: 'description' },
+    { kind: 'downloads', label: t('cardMirrors'), icon: 'download' },
+    { kind: 'features', label: t('cardFeatures'), icon: 'features' },
+    { kind: 'description', label: t('cardDescription'), icon: 'description' },
   ];
 
   for (const { kind, label, icon } of available) {
@@ -468,7 +496,7 @@ function createSearchMeta(article: ParsedArticle): HTMLElement | null {
 
 function createSummaryPanel(article: ParsedArticle): HTMLElement {
   const panel = element('section', 'fwe-summary-panel');
-  panel.setAttribute('aria-label', '游戏基本信息');
+  panel.setAttribute('aria-label', t('gameInfoAria'));
   const isSearchResult = document.body.classList.contains('search-results');
   if (article.cover) {
     const cover = article.cover.cloneNode(true) as HTMLImageElement;
@@ -511,7 +539,7 @@ function resolveMediaSource(item: {
     }
   }
 
-  // 检查是否为带有动态图或直接指向图片/视频文件的 anchor
+  // Check if anchor directly points to video or animated image
   if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(item.element.href)) {
     return { type: 'video', src: item.element.href };
   }
@@ -521,7 +549,7 @@ function resolveMediaSource(item: {
   let src = rawImgSrc;
   let hdSrc: string | undefined;
 
-  // 自动将 http 协议升级为 https（排除本地测试回环地址），避免跨协议阻塞
+  // Automatically upgrade http to https (excluding loopback) to prevent mixed content blocking
   if (
     src.startsWith('http://') &&
     !src.startsWith('http://localhost') &&
@@ -559,6 +587,10 @@ export class ImageLightbox {
   private readonly spinner: HTMLElement;
   private readonly prevBtn: HTMLButtonElement;
   private readonly nextBtn: HTMLButtonElement;
+  private readonly zoomOutBtn: HTMLButtonElement;
+  private readonly zoomInBtn: HTMLButtonElement;
+  private readonly resetBtn: HTMLButtonElement;
+  private readonly closeBtn: HTMLButtonElement;
   private readonly externalBtn: HTMLAnchorElement;
   private readonly stage: HTMLElement;
   private items: LightboxMedia[] = [];
@@ -574,7 +606,7 @@ export class ImageLightbox {
 
   constructor() {
     this.dialog = element('dialog', 'fwe-lightbox-dialog');
-    this.dialog.setAttribute('aria-label', '截图与实机预览');
+    this.dialog.setAttribute('aria-label', t('lightboxAria'));
 
     const wrapper = element('div', 'fwe-lightbox');
 
@@ -586,60 +618,60 @@ export class ImageLightbox {
 
     const toolbar = element('div', 'fwe-lightbox__toolbar');
 
-    const zoomOutBtn = element('button', 'fwe-lightbox__btn');
-    zoomOutBtn.type = 'button';
-    zoomOutBtn.title = '缩小 (Ctrl -)';
-    zoomOutBtn.setAttribute('aria-label', '缩小');
-    zoomOutBtn.append(createIcon('zoomOut'));
-    zoomOutBtn.addEventListener('click', () => this.applyZoom(this.scale * 0.8));
+    this.zoomOutBtn = element('button', 'fwe-lightbox__btn');
+    this.zoomOutBtn.type = 'button';
+    this.zoomOutBtn.title = t('zoomOutTitle');
+    this.zoomOutBtn.setAttribute('aria-label', t('zoomOutAria'));
+    this.zoomOutBtn.append(createIcon('zoomOut'));
+    this.zoomOutBtn.addEventListener('click', () => this.applyZoom(this.scale * 0.8));
 
     this.zoomLevelText = element('button', 'fwe-lightbox__zoom-indicator', '100%');
     this.zoomLevelText.type = 'button';
-    this.zoomLevelText.title = '重置缩放 (Ctrl 0)';
-    this.zoomLevelText.setAttribute('aria-label', '重置缩放');
+    this.zoomLevelText.title = t('zoomResetTitle');
+    this.zoomLevelText.setAttribute('aria-label', t('zoomResetAria'));
     this.zoomLevelText.addEventListener('click', () => this.resetZoom());
 
-    const zoomInBtn = element('button', 'fwe-lightbox__btn');
-    zoomInBtn.type = 'button';
-    zoomInBtn.title = '放大 (Ctrl +)';
-    zoomInBtn.setAttribute('aria-label', '放大');
-    zoomInBtn.append(createIcon('zoomIn'));
-    zoomInBtn.addEventListener('click', () => this.applyZoom(this.scale * 1.25));
+    this.zoomInBtn = element('button', 'fwe-lightbox__btn');
+    this.zoomInBtn.type = 'button';
+    this.zoomInBtn.title = t('zoomInTitle');
+    this.zoomInBtn.setAttribute('aria-label', t('zoomInAria'));
+    this.zoomInBtn.append(createIcon('zoomIn'));
+    this.zoomInBtn.addEventListener('click', () => this.applyZoom(this.scale * 1.25));
 
-    const resetBtn = element('button', 'fwe-lightbox__btn');
-    resetBtn.type = 'button';
-    resetBtn.title = '自适应重置';
-    resetBtn.setAttribute('aria-label', '自适应重置');
-    resetBtn.append(createIcon('zoomReset'));
-    resetBtn.addEventListener('click', () => this.resetZoom());
+    this.resetBtn = element('button', 'fwe-lightbox__btn');
+    this.resetBtn.type = 'button';
+    this.resetBtn.title = t('fitScreenTitle');
+    this.resetBtn.setAttribute('aria-label', t('fitScreenAria'));
+    this.resetBtn.append(createIcon('zoomReset'));
+    this.resetBtn.addEventListener('click', () => this.resetZoom());
 
-    toolbar.append(zoomOutBtn, this.zoomLevelText, zoomInBtn, resetBtn);
+    toolbar.append(this.zoomOutBtn, this.zoomLevelText, this.zoomInBtn, this.resetBtn);
 
     const actions = element('div', 'fwe-lightbox__actions');
 
     this.externalBtn = element('a', 'fwe-lightbox__btn');
     this.externalBtn.target = '_blank';
     this.externalBtn.rel = 'noopener noreferrer';
-    this.externalBtn.title = '在新标签页打开原图网站';
-    this.externalBtn.setAttribute('aria-label', '在新标签页打开原图网站');
+    this.externalBtn.title = t('openExternalTitle');
+    this.externalBtn.setAttribute('aria-label', t('openExternalAria'));
     this.externalBtn.append(createIcon('external'));
 
-    const closeBtn = element('button', 'fwe-lightbox__btn fwe-lightbox__btn--close');
-    closeBtn.type = 'button';
-    closeBtn.title = '关闭预览 (Esc)';
-    closeBtn.setAttribute('aria-label', '关闭预览');
-    closeBtn.append(createIcon('close'));
-    closeBtn.addEventListener('click', () => this.close());
+    this.closeBtn = element('button', 'fwe-lightbox__btn fwe-lightbox__btn--close');
+    this.closeBtn.type = 'button';
+    this.closeBtn.title = t('closeLightboxTitle');
+    this.closeBtn.setAttribute('aria-label', t('closeLightboxAria'));
+    this.closeBtn.append(createIcon('close'));
+    this.closeBtn.addEventListener('click', () => this.close());
 
-    actions.append(this.externalBtn, closeBtn);
+    actions.append(this.externalBtn, this.closeBtn);
     header.append(metaGroup, toolbar, actions);
 
     const body = element('div', 'fwe-lightbox__body');
 
     this.prevBtn = element('button', 'fwe-lightbox__nav fwe-lightbox__nav--prev');
     this.prevBtn.type = 'button';
-    this.prevBtn.title = '上一张 (←)';
-    this.prevBtn.setAttribute('aria-label', '上一张');
+    this.prevBtn.title = t('prevMediaTitle');
+    this.prevBtn.setAttribute('aria-label', t('prevMediaAria'));
     this.prevBtn.append(createIcon('chevronLeft'));
     this.prevBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -648,8 +680,8 @@ export class ImageLightbox {
 
     this.nextBtn = element('button', 'fwe-lightbox__nav fwe-lightbox__nav--next');
     this.nextBtn.type = 'button';
-    this.nextBtn.title = '下一张 (→)';
-    this.nextBtn.setAttribute('aria-label', '下一张');
+    this.nextBtn.title = t('nextMediaTitle');
+    this.nextBtn.setAttribute('aria-label', t('nextMediaAria'));
     this.nextBtn.append(createIcon('chevronRight'));
     this.nextBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -921,6 +953,26 @@ export class ImageLightbox {
     }
   }
 
+  public updateLanguage(): void {
+    this.dialog.setAttribute('aria-label', t('lightboxAria'));
+    this.zoomOutBtn.title = t('zoomOutTitle');
+    this.zoomOutBtn.setAttribute('aria-label', t('zoomOutAria'));
+    this.zoomLevelText.title = t('zoomResetTitle');
+    this.zoomLevelText.setAttribute('aria-label', t('zoomResetAria'));
+    this.zoomInBtn.title = t('zoomInTitle');
+    this.zoomInBtn.setAttribute('aria-label', t('zoomInAria'));
+    this.resetBtn.title = t('fitScreenTitle');
+    this.resetBtn.setAttribute('aria-label', t('fitScreenAria'));
+    this.externalBtn.title = t('openExternalTitle');
+    this.externalBtn.setAttribute('aria-label', t('openExternalAria'));
+    this.closeBtn.title = t('closeLightboxTitle');
+    this.closeBtn.setAttribute('aria-label', t('closeLightboxAria'));
+    this.prevBtn.title = t('prevMediaTitle');
+    this.prevBtn.setAttribute('aria-label', t('prevMediaAria'));
+    this.nextBtn.title = t('nextMediaTitle');
+    this.nextBtn.setAttribute('aria-label', t('nextMediaAria'));
+  }
+
   public bindTrigger(anchor: HTMLAnchorElement, items: LightboxMedia[], index: number): void {
     anchor.addEventListener('click', (event) => {
       event.preventDefault();
@@ -1018,6 +1070,7 @@ export class RatingPopover {
   private readonly metascoreRow: HTMLElement;
   private readonly metascoreValue: HTMLElement;
   private readonly unmatchedSection: HTMLElement;
+  private readonly unmatchedTextEl: HTMLElement;
   private readonly actions: HTMLElement;
   private readonly steamLink: HTMLAnchorElement;
   private readonly steamDbLink: HTMLAnchorElement;
@@ -1026,6 +1079,7 @@ export class RatingPopover {
   private hideTimeout: number | null = null;
   public currentAnchor: HTMLElement | null = null;
   private onRefreshCallback: (() => void) | null = null;
+  private currentData: GameRatingData | null = null;
 
   constructor() {
     this.element = element('div', 'fwe-rating-popover');
@@ -1040,8 +1094,8 @@ export class RatingPopover {
     this.appIdBadge = element('span', 'fwe-rating-popover__appid');
     this.refreshBtn = element('button', 'fwe-rating-popover__refresh-btn');
     this.refreshBtn.type = 'button';
-    this.refreshBtn.setAttribute('title', '强制重新获取评分（清除本地缓存）');
-    this.refreshBtn.setAttribute('aria-label', '强制重新获取评分');
+    this.refreshBtn.setAttribute('title', t('ratingRefreshTitle'));
+    this.refreshBtn.setAttribute('aria-label', t('ratingRefreshAria'));
     this.refreshBtn.append(createIcon('refresh', 'fwe-rating-popover__refresh-icon'));
     this.refreshBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1050,7 +1104,7 @@ export class RatingPopover {
     headerRight.append(this.appIdBadge, this.refreshBtn);
     header.append(this.title, headerRight);
 
-    // Steam 评测区域（匹配成功）
+    // Steam reviews section (matched)
     this.steamSection = element('div', 'fwe-rating-popover__section');
     const steamHeadline = element('div', 'fwe-rating-popover__headline');
     this.scorePercent = element('span', 'fwe-rating-popover__percent');
@@ -1064,28 +1118,28 @@ export class RatingPopover {
     this.reviewsCount = element('div', 'fwe-rating-popover__count');
     this.steamSection.append(steamHeadline, scoreBar, this.reviewsCount);
 
-    // Metascore 区域
+    // Metascore section
     this.metascoreRow = element('div', 'fwe-rating-popover__metascore-row');
     const metaLabel = element('span', 'fwe-rating-popover__meta-label', 'Metascore');
     this.metascoreValue = element('span', 'fwe-rating-popover__meta-val');
     this.metascoreRow.append(metaLabel, this.metascoreValue);
 
-    // 未收录/未匹配提示区域
+    // Unmatched notification section
     this.unmatchedSection = element('div', 'fwe-rating-popover__unmatched-section');
-    const unmatchedText = element(
+    this.unmatchedTextEl = element(
       'div',
       'fwe-rating-popover__unmatched-text',
-      '未能在 Steam 自动匹配到有效评测数据，可能是游戏在 Steam 暂无足够评价，或标题包含特殊别名。',
+      t('ratingUnmatchedDesc'),
     );
-    this.unmatchedSection.append(unmatchedText);
+    this.unmatchedSection.append(this.unmatchedTextEl);
 
-    // 操作按钮列表
+    // Action buttons list
     this.actions = element('div', 'fwe-rating-popover__actions');
-    this.steamLink = element('a', 'fwe-rating-popover__btn', 'Steam 商店');
+    this.steamLink = element('a', 'fwe-rating-popover__btn', t('steamStore'));
     this.steamLink.target = '_blank';
     this.steamLink.rel = 'noopener noreferrer';
 
-    this.steamDbLink = element('a', 'fwe-rating-popover__btn', 'SteamDB');
+    this.steamDbLink = element('a', 'fwe-rating-popover__btn', t('steamDb'));
     this.steamDbLink.target = '_blank';
     this.steamDbLink.rel = 'noopener noreferrer';
 
@@ -1096,7 +1150,7 @@ export class RatingPopover {
     this.unmatchedRetryBtn = element(
       'button',
       'fwe-rating-popover__btn fwe-rating-popover__btn--primary',
-      '重新查询 🔄',
+      t('queryAgain'),
     );
     this.unmatchedRetryBtn.type = 'button';
     this.unmatchedRetryBtn.addEventListener('click', (e) => {
@@ -1138,10 +1192,11 @@ export class RatingPopover {
   }
 
   private triggerRefresh(): void {
-    const icon = this.refreshBtn.querySelector('.fwe-rating-popover__refresh-icon');
-    icon?.classList.add('fwe-spin');
     this.refreshBtn.disabled = true;
     this.unmatchedRetryBtn.disabled = true;
+    this.refreshBtn
+      .querySelector('.fwe-rating-popover__refresh-icon')
+      ?.classList.add('fwe-spin');
     if (this.onRefreshCallback) {
       this.onRefreshCallback();
     }
@@ -1183,13 +1238,14 @@ export class RatingPopover {
       this.hideTimeout = null;
     }
     this.currentAnchor = anchor;
+    this.currentData = data;
     this.onRefreshCallback = onRefresh ?? null;
     this.refreshBtn.disabled = false;
     this.refreshBtn
       .querySelector('.fwe-rating-popover__refresh-icon')
       ?.classList.remove('fwe-spin');
 
-    // 显示已匹配视图
+    // Show matched rating view
     this.steamSection.style.removeProperty('display');
     this.unmatchedSection.style.setProperty('display', 'none');
     this.unmatchedRetryBtn.style.setProperty('display', 'none');
@@ -1198,12 +1254,16 @@ export class RatingPopover {
     this.appIdBadge.textContent = `AppID: ${data.appId}`;
     this.scorePercent.textContent = `${data.positivePercent}%`;
     this.scorePercent.className = `fwe-rating-popover__percent ${getRatingColorClass(data.positivePercent)}`;
-    this.scoreDesc.textContent = data.scoreDesc;
+    this.scoreDesc.textContent = translateScoreDesc(data.scoreDesc, getActiveLanguage());
 
     this.scoreBarFill.style.width = `${Math.max(5, Math.min(100, data.positivePercent))}%`;
     this.scoreBarFill.className = `fwe-rating-popover__bar-fill ${getRatingColorClass(data.positivePercent)}`;
 
-    this.reviewsCount.textContent = `共 ${data.totalReviews.toLocaleString()} 篇玩家评测（${data.totalPositive.toLocaleString()} 好评 / ${data.totalNegative.toLocaleString()} 差评）`;
+    this.reviewsCount.textContent = t('reviewsSummary', {
+      total: data.totalReviews.toLocaleString(),
+      positive: data.totalPositive.toLocaleString(),
+      negative: data.totalNegative.toLocaleString(),
+    });
 
     if (typeof data.metascore === 'number') {
       this.metascoreRow.style.removeProperty('display');
@@ -1217,11 +1277,11 @@ export class RatingPopover {
       this.metacriticLink.style.setProperty('display', 'none');
     }
 
-    this.steamLink.textContent = 'Steam 商店';
+    this.steamLink.textContent = t('steamStore');
     this.steamLink.href = data.steamUrl;
     this.steamLink.style.removeProperty('display');
 
-    this.steamDbLink.textContent = 'SteamDB';
+    this.steamDbLink.textContent = t('steamDb');
     this.steamDbLink.href = data.steamDbUrl;
     this.steamDbLink.style.removeProperty('display');
 
@@ -1234,6 +1294,7 @@ export class RatingPopover {
       this.hideTimeout = null;
     }
     this.currentAnchor = anchor;
+    this.currentData = null;
     this.onRefreshCallback = onRefresh ?? null;
     this.refreshBtn.disabled = false;
     this.unmatchedRetryBtn.disabled = false;
@@ -1241,7 +1302,7 @@ export class RatingPopover {
       .querySelector('.fwe-rating-popover__refresh-icon')
       ?.classList.remove('fwe-spin');
 
-    // 隐藏匹配视图，显示未匹配视图
+    // Hide matched view, show unmatched view
     this.steamSection.style.setProperty('display', 'none');
     this.metascoreRow.style.setProperty('display', 'none');
     this.metacriticLink.style.setProperty('display', 'none');
@@ -1250,17 +1311,38 @@ export class RatingPopover {
 
     const cleanTitle = cleanTitleBase(title);
     this.title.textContent = cleanTitle || title;
-    this.appIdBadge.textContent = '未收录';
+    this.appIdBadge.textContent = t('ratingUnmatchedText');
 
-    this.steamLink.textContent = 'Steam 搜索';
+    this.steamLink.textContent = t('steamSearch');
     this.steamLink.href = `https://store.steampowered.com/search/?term=${encodeURIComponent(cleanTitle || title)}`;
     this.steamLink.style.removeProperty('display');
 
-    this.steamDbLink.textContent = 'SteamDB 搜索';
+    this.steamDbLink.textContent = t('steamDbSearch');
     this.steamDbLink.href = `https://steamdb.info/search/?a=app&q=${encodeURIComponent(cleanTitle || title)}`;
     this.steamDbLink.style.removeProperty('display');
 
     this.positionAt(anchor);
+  }
+
+  updateLanguage(): void {
+    this.refreshBtn.setAttribute('title', t('ratingRefreshTitle'));
+    this.refreshBtn.setAttribute('aria-label', t('ratingRefreshAria'));
+    this.unmatchedTextEl.textContent = t('ratingUnmatchedDesc');
+    this.unmatchedRetryBtn.textContent = t('queryAgain');
+    if (this.currentData) {
+      this.scoreDesc.textContent = translateScoreDesc(this.currentData.scoreDesc, getActiveLanguage());
+      this.reviewsCount.textContent = t('reviewsSummary', {
+        total: this.currentData.totalReviews.toLocaleString(),
+        positive: this.currentData.totalPositive.toLocaleString(),
+        negative: this.currentData.totalNegative.toLocaleString(),
+      });
+      this.steamLink.textContent = t('steamStore');
+      this.steamDbLink.textContent = t('steamDb');
+    } else {
+      this.appIdBadge.textContent = t('ratingUnmatchedText');
+      this.steamLink.textContent = t('steamSearch');
+      this.steamDbLink.textContent = t('steamDbSearch');
+    }
   }
 
   hide(delay = 180): void {
@@ -1297,12 +1379,12 @@ function renderLoadingBadge(container: HTMLElement): void {
   container.classList.remove('fwe-rating-container--empty');
 
   const badge = element('div', 'fwe-rating-badge fwe-rating-badge--loading');
-  badge.setAttribute('aria-label', '正在加载游戏评分...');
-  badge.title = '正在查询 Steam 评分...';
+  badge.setAttribute('aria-label', t('ratingLoadingAria'));
+  badge.title = t('ratingLoadingTitle');
 
   const pill = element('span', 'fwe-rating-pill fwe-rating-pill--loading');
   pill.append(createIcon('spinner', 'fwe-rating-icon fwe-spin'));
-  pill.append(element('span', 'fwe-rating-loading-text', '查询中...'));
+  pill.append(element('span', 'fwe-rating-loading-text', t('ratingLoadingText')));
   badge.append(pill);
   container.append(badge);
 }
@@ -1319,12 +1401,12 @@ function renderUnmatchedBadge(
   const badge = element('div', 'fwe-rating-badge fwe-rating-badge--unmatched');
   badge.setAttribute('role', 'button');
   badge.setAttribute('tabindex', '0');
-  badge.setAttribute('aria-label', `${article.title} 未收录评分，点击或悬浮查看详情`);
-  badge.title = '未在 Steam 自动匹配到评分，悬浮可查看详情或强制刷新';
+  badge.setAttribute('aria-label', t('ratingUnmatchedAria', { title: article.title }));
+  badge.title = t('ratingUnmatchedTitle');
 
   const pill = element('span', 'fwe-rating-pill fwe-rating-pill--unmatched');
   pill.append(createIcon('help', 'fwe-rating-icon fwe-rating-icon--unmatched'));
-  pill.append(element('span', 'fwe-rating-unmatched-text', '未收录'));
+  pill.append(element('span', 'fwe-rating-unmatched-text', t('ratingUnmatchedText')));
   badge.append(pill);
 
   badge.addEventListener('mouseenter', () => {
@@ -1357,12 +1439,17 @@ function renderSuccessBadge(
   container.innerHTML = '';
   container.classList.remove('fwe-rating-container--empty');
 
+  const localizedDesc = translateScoreDesc(data.scoreDesc, getActiveLanguage());
   const badge = element('div', 'fwe-rating-badge');
   badge.setAttribute('role', 'button');
   badge.setAttribute('tabindex', '0');
   badge.setAttribute(
     'aria-label',
-    `${data.name} 评分：Steam ${data.positivePercent}% ${data.scoreDesc}`,
+    t('cardRatingAria', {
+      name: data.name,
+      percent: data.positivePercent,
+      scoreDesc: localizedDesc,
+    }),
   );
 
   const steamPill = element(
@@ -1425,10 +1512,12 @@ function updateDetailFactsWithRating(
   term.append(createIcon('star'), document.createTextNode('Rating'));
   const description = element('dd', 'fwe-fact__value');
 
+  const localizedDesc = translateScoreDesc(data.scoreDesc, getActiveLanguage());
+  const reviewCountText = t('reviewCount', { total: data.totalReviews.toLocaleString() });
   const steamLink = element(
     'a',
     'fwe-fact-link',
-    `Steam: ${data.positivePercent}% (${data.scoreDesc} · ${data.totalReviews.toLocaleString()} 评测)`,
+    `Steam: ${data.positivePercent}% (${localizedDesc} · ${reviewCountText})`,
   );
   steamLink.href = data.steamUrl;
   steamLink.target = '_blank';
@@ -1447,8 +1536,8 @@ function updateDetailFactsWithRating(
   if (triggerRefresh) {
     const refreshBtn = element('button', 'fwe-fact-refresh-btn');
     refreshBtn.type = 'button';
-    refreshBtn.title = '强制刷新评分（清除缓存）';
-    refreshBtn.setAttribute('aria-label', '强制刷新评分');
+    refreshBtn.title = t('ratingRefreshTitle');
+    refreshBtn.setAttribute('aria-label', t('ratingRefreshAria'));
     refreshBtn.append(createIcon('refresh', 'fwe-fact-refresh-icon'));
     refreshBtn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1532,13 +1621,13 @@ function addArticleMeta(
   meta.append(createIcon('calendar'), document.createTextNode(displayDateText));
   transaction.insert(meta, header);
 
-  // 在标题行右侧注入评分徽章与相对发布时间徽章
+  // Inject rating badge and relative time badge to the right of header
   const title = header.querySelector<HTMLElement>('.entry-title');
   if (title && !header.querySelector('.fwe-header-right')) {
     const parsedDate = parseArticleDate(originalDate, header);
     let timeText = displayDateText;
     if (parsedDate) {
-      timeText = formatRelativeTime(parsedDate);
+      timeText = formatRelativeTime(parsedDate, new Date(), getActiveLanguage());
     }
     const rightBox = element('div', 'fwe-header-right');
 
@@ -1548,12 +1637,15 @@ function addArticleMeta(
     }
 
     if (article.hasPinkPawAward) {
-      const pawBadge = element('span', 'fwe-paw-badge', '🐾 Pink Paw');
+      const pawBadge = element('span', 'fwe-paw-badge', t('pinkPawBadge'));
       pawBadge.title = 'FitGirl Personal Pink Paw Award';
       rightBox.append(pawBadge);
     }
 
     const timeBadge = element('span', 'fwe-time-ago', timeText);
+    if (parsedDate) {
+      timeBadge.dataset.dateIso = parsedDate.toISOString();
+    }
     rightBox.append(timeBadge);
     transaction.insert(rightBox, header);
   }
@@ -1746,7 +1838,11 @@ function transformSpecial(article: ParsedArticle, transaction: DomTransaction): 
   }
 }
 
-function createSearchForm(): HTMLFormElement {
+function createSearchForm(): {
+  form: HTMLFormElement;
+  input: HTMLInputElement;
+  submit: HTMLButtonElement;
+} {
   const form = element('form', 'fwe-search');
   form.method = 'get';
   form.action = `${window.location.origin}/`;
@@ -1754,26 +1850,26 @@ function createSearchForm(): HTMLFormElement {
   const input = element('input', 'fwe-search__input');
   input.type = 'search';
   input.name = 's';
-  input.placeholder = 'Search repacks…';
-  input.setAttribute('aria-label', '搜索游戏与文章');
+  input.placeholder = t('searchPlaceholder');
+  input.setAttribute('aria-label', t('searchAria'));
   input.value = new URLSearchParams(window.location.search).get('s') ?? '';
   const submit = element('button', 'fwe-search__submit');
   submit.type = 'submit';
-  submit.setAttribute('aria-label', '提交搜索');
+  submit.setAttribute('aria-label', t('searchSubmitAria'));
   submit.append(createIcon('search'));
   form.append(input, submit);
-  return form;
+  return { form, input, submit };
 }
 
 function createPopularDialog(items: PopularItem[]): HTMLDialogElement {
   const dialog = element('dialog', 'fwe-popular-dialog');
   dialog.setAttribute('aria-labelledby', 'fwe-popular-title');
   const header = element('header', 'fwe-dialog__header');
-  const heading = element('h2', '', 'Most Popular Repacks');
+  const heading = element('h2', '', t('popularHeading'));
   heading.id = 'fwe-popular-title';
   const close = element('button', 'fwe-icon-button');
   close.type = 'button';
-  close.setAttribute('aria-label', '关闭热门榜单');
+  close.setAttribute('aria-label', t('popularCloseAria'));
   close.append(createIcon('close'));
   header.append(heading, close);
   const list = element('ol', 'fwe-popular-list');
@@ -1819,7 +1915,7 @@ function appendNavigation(parent: HTMLElement, items: NavigationItem[]): void {
 
 function appendArchives(parent: HTMLElement, groups: ArchiveGroup[]): void {
   const section = element('section', 'fwe-archives');
-  section.append(element('h2', '', 'Monthly Archives'));
+  section.append(element('h2', '', t('archivesHeading')));
   groups.forEach((group, index) => {
     const details = element('details', 'fwe-archive-year');
     details.open = index === 0;
@@ -1843,11 +1939,11 @@ function createBrowseDialog(items: NavigationItem[], groups: ArchiveGroup[]): HT
   const dialog = element('dialog', 'fwe-browse-dialog');
   dialog.setAttribute('aria-labelledby', 'fwe-browse-title');
   const header = element('header', 'fwe-dialog__header');
-  const title = element('h2', '', 'Browse FitGirl');
+  const title = element('h2', '', t('browseHeading'));
   title.id = 'fwe-browse-title';
   const close = element('button', 'fwe-icon-button');
   close.type = 'button';
-  close.setAttribute('aria-label', '关闭浏览菜单');
+  close.setAttribute('aria-label', t('browseCloseAria'));
   close.append(createIcon('close'));
   header.append(title, close);
   const content = element('div', 'fwe-browse-dialog__content');
@@ -1866,6 +1962,7 @@ export class FitGirlEnhancedApp {
   private mediaExpanded: boolean;
   private infiniteScroll: boolean;
   private showRatings: boolean;
+  private language: SupportedLanguage;
   private transaction: DomTransaction | null = null;
   private observer: MutationObserver | null = null;
   private videoObserver: IntersectionObserver | null = null;
@@ -1876,15 +1973,27 @@ export class FitGirlEnhancedApp {
   private hasNextPage = true;
   private observerTimer: number | null = null;
   private readonly viewControl: HTMLDetailsElement;
+  private readonly viewSummarySpan: HTMLElement;
+  private readonly layoutLabel: HTMLElement;
   private readonly switchButton: HTMLButtonElement;
+  private readonly mediaLabel: HTMLElement;
   private readonly mediaSwitchButton: HTMLButtonElement;
+  private readonly infiniteLabel: HTMLElement;
   private readonly infiniteSwitchButton: HTMLButtonElement;
+  private readonly ratingLabel: HTMLElement;
   private readonly ratingSwitchButton: HTMLButtonElement;
+  private readonly languageLabel: HTMLElement;
+  private readonly enButton: HTMLButtonElement;
+  private readonly zhButton: HTMLButtonElement;
   private readonly popularButton: HTMLButtonElement;
+  private readonly popularButtonText: Text;
   private readonly browseButton: HTMLButtonElement;
+  private readonly browseButtonSpan: HTMLElement;
   private readonly popularDialog: HTMLDialogElement;
   private readonly browseDialog: HTMLDialogElement;
   private readonly searchForm: HTMLFormElement;
+  private readonly searchInput: HTMLInputElement;
+  private readonly searchSubmit: HTMLButtonElement;
   private readonly lightbox: ImageLightbox;
   private readonly gameModal: GameDetailModal;
   private readonly ratingPopover: RatingPopover;
@@ -1898,6 +2007,10 @@ export class FitGirlEnhancedApp {
     this.mediaExpanded = getFastStoredMediaExpand();
     this.infiniteScroll = getFastStoredInfiniteScroll();
     this.showRatings = getFastStoredShowRatings();
+    this.language = getFastStoredLanguage() ?? detectBrowserLanguage();
+    setActiveLanguage(this.language);
+    document.documentElement.dataset.fweLang = this.language;
+
     this.lightbox = new ImageLightbox();
     this.gameModal = new GameDetailModal();
     this.ratingPopover = new RatingPopover();
@@ -1911,58 +2024,97 @@ export class FitGirlEnhancedApp {
     );
     document.body.append(this.popularDialog, this.browseDialog);
 
-    this.searchForm = createSearchForm();
+    const search = createSearchForm();
+    this.searchForm = search.form;
+    this.searchInput = search.input;
+    this.searchSubmit = search.submit;
+
     this.popularButton = element('button', 'fwe-popular-button');
     this.popularButton.type = 'button';
-    this.popularButton.setAttribute('aria-label', '打开热门榜单');
-    this.popularButton.append(createIcon('popular'), document.createTextNode('Popular'));
+    this.popularButton.setAttribute('aria-label', t('popularAria', this.language));
+    this.popularButtonText = document.createTextNode(t('popularBtn', this.language));
+    this.popularButton.append(createIcon('popular'), this.popularButtonText);
+
     this.browseButton = element('button', 'fwe-browse-button');
     this.browseButton.type = 'button';
-    this.browseButton.setAttribute('aria-label', '浏览站点路由和月度归档');
-    this.browseButton.append(createIcon('menu'), element('span', '', 'Browse'));
+    this.browseButton.setAttribute('aria-label', t('browseAria', this.language));
+    this.browseButtonSpan = element('span', '', t('browseBtn', this.language));
+    this.browseButton.append(createIcon('menu'), this.browseButtonSpan);
 
     this.viewControl = element('details', 'fwe-view-control');
     const viewSummary = element('summary', 'fwe-view-control__trigger');
-    viewSummary.append(createIcon('eye'), element('span', '', 'View'));
+    this.viewSummarySpan = element('span', '', t('viewTrigger', this.language));
+    viewSummary.append(createIcon('eye'), this.viewSummarySpan);
     const panel = element('div', 'fwe-view-control__panel');
 
     const layoutRow = element('div', 'fwe-view-control__row');
-    layoutRow.append(element('span', 'fwe-view-control__label', 'Enhanced View'));
+    this.layoutLabel = element('span', 'fwe-view-control__label', t('enhancedView', this.language));
+    layoutRow.append(this.layoutLabel);
     this.switchButton = element('button', 'fwe-switch');
     this.switchButton.type = 'button';
     this.switchButton.setAttribute('role', 'switch');
-    this.switchButton.setAttribute('aria-label', '切换增强布局与原站布局');
+    this.switchButton.setAttribute('aria-label', t('enhancedViewAria', this.language));
     this.switchButton.append(element('span', 'fwe-switch__thumb'));
     layoutRow.append(this.switchButton);
 
     const mediaRow = element('div', 'fwe-view-control__row');
-    mediaRow.append(element('span', 'fwe-view-control__label', 'Expand Screenshots'));
+    this.mediaLabel = element('span', 'fwe-view-control__label', t('expandScreenshots', this.language));
+    mediaRow.append(this.mediaLabel);
     this.mediaSwitchButton = element('button', 'fwe-switch');
     this.mediaSwitchButton.type = 'button';
     this.mediaSwitchButton.setAttribute('role', 'switch');
-    this.mediaSwitchButton.setAttribute('aria-label', '切换截图与实机预览默认展开状态');
+    this.mediaSwitchButton.setAttribute('aria-label', t('expandScreenshotsAria', this.language));
     this.mediaSwitchButton.append(element('span', 'fwe-switch__thumb'));
     mediaRow.append(this.mediaSwitchButton);
 
     const infiniteRow = element('div', 'fwe-view-control__row');
-    infiniteRow.append(element('span', 'fwe-view-control__label', 'Infinite Scroll'));
+    this.infiniteLabel = element('span', 'fwe-view-control__label', t('infiniteScroll', this.language));
+    infiniteRow.append(this.infiniteLabel);
     this.infiniteSwitchButton = element('button', 'fwe-switch');
     this.infiniteSwitchButton.type = 'button';
     this.infiniteSwitchButton.setAttribute('role', 'switch');
-    this.infiniteSwitchButton.setAttribute('aria-label', '切换瀑布流无限滚动加载');
+    this.infiniteSwitchButton.setAttribute('aria-label', t('infiniteScrollAria', this.language));
     this.infiniteSwitchButton.append(element('span', 'fwe-switch__thumb'));
     infiniteRow.append(this.infiniteSwitchButton);
 
     const ratingRow = element('div', 'fwe-view-control__row');
-    ratingRow.append(element('span', 'fwe-view-control__label', 'Show Game Ratings'));
+    this.ratingLabel = element('span', 'fwe-view-control__label', t('showRatings', this.language));
+    ratingRow.append(this.ratingLabel);
     this.ratingSwitchButton = element('button', 'fwe-switch');
     this.ratingSwitchButton.type = 'button';
     this.ratingSwitchButton.setAttribute('role', 'switch');
-    this.ratingSwitchButton.setAttribute('aria-label', '切换游戏评分显示');
+    this.ratingSwitchButton.setAttribute('aria-label', t('showRatingsAria', this.language));
     this.ratingSwitchButton.append(element('span', 'fwe-switch__thumb'));
     ratingRow.append(this.ratingSwitchButton);
 
-    panel.append(layoutRow, mediaRow, infiniteRow, ratingRow);
+    const langRow = element('div', 'fwe-view-control__row');
+    this.languageLabel = element('span', 'fwe-view-control__label', t('language', this.language));
+    langRow.append(this.languageLabel);
+
+    const segmented = element('div', 'fwe-segmented');
+    segmented.setAttribute('role', 'group');
+    segmented.setAttribute('aria-label', t('languageAria', this.language));
+
+    this.enButton = element(
+      'button',
+      `fwe-segmented__btn${this.language === 'en' ? ' fwe-segmented__btn--active' : ''}`,
+      'EN',
+    );
+    this.enButton.type = 'button';
+    this.enButton.setAttribute('aria-pressed', String(this.language === 'en'));
+
+    this.zhButton = element(
+      'button',
+      `fwe-segmented__btn${this.language === 'zh-CN' ? ' fwe-segmented__btn--active' : ''}`,
+      '中文',
+    );
+    this.zhButton.type = 'button';
+    this.zhButton.setAttribute('aria-pressed', String(this.language === 'zh-CN'));
+
+    segmented.append(this.enButton, this.zhButton);
+    langRow.append(segmented);
+
+    panel.append(layoutRow, mediaRow, infiniteRow, ratingRow, langRow);
     this.viewControl.append(viewSummary, panel);
     this.mountControls();
     this.applyMode(this.mode);
@@ -1986,6 +2138,8 @@ export class FitGirlEnhancedApp {
       'click',
       () => void this.setShowRatings(!this.showRatings),
     );
+    this.enButton.addEventListener('click', () => void this.setLanguage('en'));
+    this.zhButton.addEventListener('click', () => void this.setLanguage('zh-CN'));
     this.popularButton.addEventListener('click', () =>
       this.openDialog(this.popularDialog, this.popularButton),
     );
@@ -2002,11 +2156,12 @@ export class FitGirlEnhancedApp {
   }
 
   async start(): Promise<void> {
-    const [mode, mediaExpanded, infiniteScroll, showRatings] = await Promise.all([
+    const [mode, mediaExpanded, infiniteScroll, showRatings, language] = await Promise.all([
       readStoredLayoutMode(),
       readStoredMediaExpand(),
       readStoredInfiniteScroll(),
       readStoredShowRatings(),
+      readStoredLanguage(),
     ]);
     if (this.mode !== mode) {
       this.mode = mode;
@@ -2024,6 +2179,11 @@ export class FitGirlEnhancedApp {
       this.showRatings = showRatings;
       this.applyShowRatings(this.showRatings);
     }
+    const resolvedLang = language ?? detectBrowserLanguage();
+    if (this.language !== resolvedLang) {
+      this.language = resolvedLang;
+      this.applyLanguage(resolvedLang);
+    }
   }
 
   private mountControls(): void {
@@ -2037,6 +2197,110 @@ export class FitGirlEnhancedApp {
       this.browseButton,
       this.viewControl,
     );
+  }
+
+  private async setLanguage(lang: SupportedLanguage): Promise<void> {
+    if (this.language === lang) return;
+    this.language = lang;
+    this.enButton.disabled = true;
+    this.zhButton.disabled = true;
+    await writeStoredLanguage(lang);
+    this.applyLanguage(lang);
+    this.enButton.disabled = false;
+    this.zhButton.disabled = false;
+  }
+
+  private applyLanguage(lang: SupportedLanguage): void {
+    this.language = lang;
+    setActiveLanguage(lang);
+    document.documentElement.dataset.fweLang = lang;
+
+    // Update View control texts
+    this.viewSummarySpan.textContent = t('viewTrigger', lang);
+    this.layoutLabel.textContent = t('enhancedView', lang);
+    this.switchButton.setAttribute('aria-label', t('enhancedViewAria', lang));
+    this.mediaLabel.textContent = t('expandScreenshots', lang);
+    this.mediaSwitchButton.setAttribute('aria-label', t('expandScreenshotsAria', lang));
+    this.infiniteLabel.textContent = t('infiniteScroll', lang);
+    this.infiniteSwitchButton.setAttribute('aria-label', t('infiniteScrollAria', lang));
+    this.ratingLabel.textContent = t('showRatings', lang);
+    this.ratingSwitchButton.setAttribute('aria-label', t('showRatingsAria', lang));
+    this.languageLabel.textContent = t('language', lang);
+
+    // Update segmented buttons
+    this.enButton.classList.toggle('fwe-segmented__btn--active', lang === 'en');
+    this.enButton.setAttribute('aria-pressed', String(lang === 'en'));
+    this.zhButton.classList.toggle('fwe-segmented__btn--active', lang === 'zh-CN');
+    this.zhButton.setAttribute('aria-pressed', String(lang === 'zh-CN'));
+
+    // Update Search bar
+    this.searchInput.placeholder = t('searchPlaceholder', lang);
+    this.searchInput.setAttribute('aria-label', t('searchAria', lang));
+    this.searchSubmit.setAttribute('aria-label', t('searchSubmitAria', lang));
+
+    // Update header buttons
+    this.popularButton.setAttribute('aria-label', t('popularAria', lang));
+    this.popularButtonText.textContent = t('popularBtn', lang);
+    this.browseButton.setAttribute('aria-label', t('browseAria', lang));
+    this.browseButtonSpan.textContent = t('browseBtn', lang);
+
+    // Update Dialog titles & close buttons
+    const popularTitle = this.popularDialog.querySelector<HTMLElement>('#fwe-popular-title');
+    if (popularTitle) popularTitle.textContent = t('popularHeading', lang);
+    const popularClose = this.popularDialog.querySelector<HTMLButtonElement>('.fwe-icon-button');
+    if (popularClose) popularClose.setAttribute('aria-label', t('popularCloseAria', lang));
+
+    const browseTitle = this.browseDialog.querySelector<HTMLElement>('#fwe-browse-title');
+    if (browseTitle) browseTitle.textContent = t('browseHeading', lang);
+    const browseClose = this.browseDialog.querySelector<HTMLButtonElement>('.fwe-icon-button');
+    if (browseClose) browseClose.setAttribute('aria-label', t('browseCloseAria', lang));
+
+    const archivesHeading = this.browseDialog.querySelector<HTMLElement>('.fwe-archives > h2');
+    if (archivesHeading) archivesHeading.textContent = t('archivesHeading', lang);
+
+    // Update Popover, Lightbox & Modal
+    this.ratingPopover.updateLanguage();
+    this.lightbox.updateLanguage();
+    this.gameModal.updateLanguage();
+
+    // Update relative time badges
+    document.querySelectorAll<HTMLElement>('.fwe-time-ago').forEach((el) => {
+      const iso = el.dataset.dateIso;
+      if (iso) {
+        const date = new Date(iso);
+        if (!isNaN(date.getTime())) {
+          el.textContent = formatRelativeTime(date, new Date(), lang);
+        }
+      }
+    });
+
+    // Update Pink Paw badge text if present
+    document.querySelectorAll<HTMLElement>('.fwe-paw-badge').forEach((el) => {
+      el.textContent = t('pinkPawBadge', lang);
+    });
+
+    // Update Card payload action buttons (Mirrors, Features, Description)
+    document.querySelectorAll<HTMLElement>('.fwe-action-btn, .fwe-card-btn').forEach((btn) => {
+      const targetId = btn.getAttribute('data-fwe-toggle');
+      if (targetId?.endsWith('-mirrors')) {
+        const span = btn.querySelector('span');
+        if (span) span.textContent = t('cardMirrors', lang);
+      } else if (targetId?.endsWith('-features')) {
+        const span = btn.querySelector('span');
+        if (span) span.textContent = t('cardFeatures', lang);
+      } else if (targetId?.endsWith('-desc')) {
+        const span = btn.querySelector('span');
+        if (span) span.textContent = t('cardDescription', lang);
+      }
+    });
+
+    // Update ratings badges (unmatched and loading badges text)
+    document.querySelectorAll<HTMLElement>('.fwe-rating-loading-text').forEach((el) => {
+      el.textContent = t('ratingLoadingText', lang);
+    });
+    document.querySelectorAll<HTMLElement>('.fwe-rating-unmatched-text').forEach((el) => {
+      el.textContent = t('ratingUnmatchedText', lang);
+    });
   }
 
   private async setMode(mode: LayoutMode): Promise<void> {
@@ -2213,7 +2477,7 @@ export class FitGirlEnhancedApp {
     if (!this.transaction || this.processing) return;
     this.processing = true;
 
-    // 暂停 Observer 避免自身 DOM 重组触发无限循环
+    // Pause Observer to prevent mutations from triggering recursive loops
     const activeObserver = this.observer;
     if (activeObserver) {
       activeObserver.disconnect();
@@ -2274,7 +2538,7 @@ export class FitGirlEnhancedApp {
       }
     }
 
-    // 始终依据最初发现的序号固定排序，无论之后卡片被移动到哪一列，顺序始终严格恒定
+    // Always sort stably by the initial sequence number discovered
     cardsToLayout.sort((a, b) => {
       const seqA = Number(a.getAttribute('data-fwe-seq')) || 0;
       const seqB = Number(b.getAttribute('data-fwe-seq')) || 0;
@@ -2282,7 +2546,7 @@ export class FitGirlEnhancedApp {
     });
 
     if (!isSingle && content) {
-      // 隐藏 content 下所有非文章非导航的游离杂项，彻底解决排版空白抢占
+      // Hide loose non-article elements to eliminate layout gaps
       [...content.children].forEach((child) => {
         if (
           child instanceof HTMLElement &&
@@ -2296,7 +2560,7 @@ export class FitGirlEnhancedApp {
 
       const pageHeader = content.querySelector<HTMLElement>(':scope > .page-header');
 
-      // 确保 Upcoming Repacks 位于内容区最顶部（或紧随 page-header 之后）
+      // Ensure Upcoming Repacks sits at the top of content (or right after page-header)
       if (upcomingArticle) {
         const expectedAnchor = pageHeader ? pageHeader.nextSibling : content.firstChild;
         if (
@@ -2307,7 +2571,7 @@ export class FitGirlEnhancedApp {
         }
       }
 
-      // 获取或创建流式网格容器
+      // Obtain or create streaming grid container
       const targetColCount = this.computeColumnCount();
       this.activeColCount = targetColCount;
 
@@ -2328,9 +2592,8 @@ export class FitGirlEnhancedApp {
       stream.setAttribute('data-cols', String(targetColCount));
       stream.style.setProperty('--fwe-cols', String(targetColCount));
 
-      // 方案 A：严谨行对齐网格（Strict Row-Aligned Grid）
-      // 卡片直接作为 .fwe-stream 的直接子网格项（Grid Item），按发布时间自左向右、逐行排开！
-      // 彻底废除多立柱隔离导致的垂直时间线割裂与高差颠倒问题。
+      // Strict Row-Aligned Grid:
+      // Cards are direct children of .fwe-stream and ordered left-to-right, row-by-row
       cardsToLayout.forEach((card, index) => {
         const header = card.querySelector<HTMLElement>('.entry-header');
         if (header) {
@@ -2358,12 +2621,11 @@ export class FitGirlEnhancedApp {
         if (card.parentElement !== stream) {
           this.transaction?.move(card, stream);
         } else if (stream.children[index] !== card) {
-          // 仅当卡片在 stream 内部的位置与期望排序不一致时才做精准重排
           stream.insertBefore(card, stream.children[index] ?? null);
         }
       });
 
-      // 确保无限滚动哨兵与分页导航位于瀑布流之后
+      // Ensure sentinel and pagination navigation sit after the stream
       let sentinel = content.querySelector<HTMLElement>(':scope > .fwe-infinite-sentinel');
       if (!sentinel) {
         sentinel = element('div', 'fwe-infinite-sentinel');
@@ -2379,7 +2641,7 @@ export class FitGirlEnhancedApp {
         this.transaction.move(nav, content, sentinel.nextSibling);
       }
 
-      // 根据当前首选项决定是否激活无限滚动
+      // Apply infinite scroll state based on user preferences
       this.applyInfiniteScroll(this.infiniteScroll);
     }
 
@@ -2395,8 +2657,7 @@ export class FitGirlEnhancedApp {
     this.observer = new MutationObserver((mutations) => {
       if (this.processing || this.mode !== 'enhanced') return;
 
-      // 强效防御：仅当确有未就绪的新 article 节点被插入时才响应
-      // 彻底屏蔽 Dark Reader 注入的 style 标签、内联样式修改或微小 DOM 扰动
+      // Defensive check: only trigger when new unready articles are appended
       const hasNewUnreadyArticle = mutations.some((mutation) =>
         [...mutation.addedNodes].some(
           (node) =>
@@ -2487,7 +2748,7 @@ export class FitGirlEnhancedApp {
   private async loadNextPage(): Promise<void> {
     if (this.loadingNextPage || !this.hasNextPage || !this.infiniteScroll) return;
 
-    // 寻找原生分页中的“下一页”链接
+    // Search for next page link in standard pagination
     const nextLink = document.querySelector<HTMLAnchorElement>(
       '#content .nav-links a.next, #content .paging-navigation a.next, #content .pagination a.next',
     );
@@ -2496,7 +2757,7 @@ export class FitGirlEnhancedApp {
       const sentinel = document.querySelector<HTMLElement>('#content > .fwe-infinite-sentinel');
       if (sentinel) {
         sentinel.innerHTML = '';
-        sentinel.append(element('div', 'fwe-infinite-end', 'All repacks loaded'));
+        sentinel.append(element('div', 'fwe-infinite-end', t('infiniteEnd')));
       }
       return;
     }
@@ -2508,7 +2769,7 @@ export class FitGirlEnhancedApp {
       const loader = element('div', 'fwe-infinite-loader');
       loader.append(
         element('span', 'fwe-infinite-loader__spinner'),
-        document.createTextNode('Loading more repacks...'),
+        document.createTextNode(t('infiniteLoading')),
       );
       sentinel.append(loader);
     }
@@ -2520,12 +2781,12 @@ export class FitGirlEnhancedApp {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
 
-      // 提取新文档中的所有文章卡片
+      // Extract new article elements
       const newArticles = [
         ...doc.querySelectorAll<HTMLElement>('#content article.hentry, article.hentry'),
       ];
 
-      // 过滤掉已经在当前页面中渲染过的 ID
+      // Filter out existing cards
       const existingIds = new Set(
         [...document.querySelectorAll<HTMLElement>('article.hentry')]
           .map((a) => a.id)
@@ -2537,7 +2798,6 @@ export class FitGirlEnhancedApp {
       if (content && incomingArticles.length > 0) {
         const frag = document.createDocumentFragment();
         for (const art of incomingArticles) {
-          // 排除 upcoming / digest / special 目录页
           if (
             !art.matches(
               '.fwe-upcoming, .category-upcoming, .fwe-directory-popular, .fwe-directory-az, .fwe-directory-updates',
@@ -2546,7 +2806,6 @@ export class FitGirlEnhancedApp {
             frag.append(art);
           }
         }
-        // 追加到 content 中（此时 sentinel 前面）
         if (sentinel) {
           content.insertBefore(frag, sentinel);
         } else {
@@ -2554,7 +2813,7 @@ export class FitGirlEnhancedApp {
         }
       }
 
-      // 更新分页导航链接为下一页的导航
+      // Update pagination navigation with next page links
       const newNav = doc.querySelector<HTMLElement>(
         '#content > .navigation, #content > .paging-navigation',
       );
@@ -2573,7 +2832,7 @@ export class FitGirlEnhancedApp {
     } catch {
       if (sentinel) {
         sentinel.innerHTML = '';
-        const retryBtn = element('button', 'fwe-infinite-loader', 'Retry loading more');
+        const retryBtn = element('button', 'fwe-infinite-loader', t('infiniteRetry'));
         retryBtn.style.cursor = 'pointer';
         retryBtn.addEventListener('click', () => void this.loadNextPage());
         sentinel.append(retryBtn);

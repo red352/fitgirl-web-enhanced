@@ -8,8 +8,8 @@ class NoopIntersectionObserver {
   unobserve = vi.fn();
 }
 
-describe('增强界面生命周期', () => {
-  it('媒体、归档与导航可增强并完整恢复', async () => {
+describe('Enhanced UI Lifecycle', () => {
+  it('enhances media, archives, and navigation, and restores completely', async () => {
     vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver);
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
@@ -80,6 +80,42 @@ describe('增强界面生命周期', () => {
     toggle?.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(document.querySelectorAll('.fwe-game-layout')).toHaveLength(2);
+    vi.unstubAllGlobals();
+  });
+
+  it('switches interface language and dynamically updates live labels', async () => {
+    vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver);
+    vi.stubGlobal('matchMedia', () => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    document.body.innerHTML = fullPage;
+    const app = new FitGirlEnhancedApp();
+    await app.start();
+
+    // Default language is 'en'
+    expect(document.documentElement.dataset.fweLang).toBe('en');
+    const viewSummary = document.querySelector('.fwe-view-control__trigger span');
+    expect(viewSummary?.textContent).toBe('View');
+
+    // Switch to zh-CN via segmented control button
+    const zhBtn = document.querySelector<HTMLButtonElement>('.fwe-segmented__btn:last-child');
+    expect(zhBtn?.textContent).toBe('中文');
+    zhBtn?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(document.documentElement.dataset.fweLang).toBe('zh-CN');
+    expect(viewSummary?.textContent).toBe('视图');
+
+    // Switch back to en
+    const enBtn = document.querySelector<HTMLButtonElement>('.fwe-segmented__btn:first-child');
+    expect(enBtn?.textContent).toBe('EN');
+    enBtn?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(document.documentElement.dataset.fweLang).toBe('en');
+    expect(viewSummary?.textContent).toBe('View');
     vi.unstubAllGlobals();
   });
 });

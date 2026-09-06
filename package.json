@@ -1,7 +1,7 @@
 {
   "name": "fitgirl-web-enhanced",
-  "version": "1.5.0",
-  "description": "优化 FitGirl Repacks 的信息密度、宽屏布局、折叠内容与热门榜单。",
+  "version": "1.6.0",
+  "description": "Enhance FitGirl Repacks with widescreen responsive grid, Steam ratings, media gallery, and collapsible content.",
   "type": "module",
   "private": true,
   "license": "MIT",

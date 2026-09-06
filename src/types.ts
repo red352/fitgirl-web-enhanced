@@ -105,6 +105,13 @@ export interface StoredShowRatingsPreference {
   updatedAt: number;
 }
 
+export type SupportedLanguage = 'en' | 'zh-CN';
+
+export interface StoredLanguagePreference {
+  language: SupportedLanguage;
+  updatedAt: number;
+}
+
 export interface GameRatingData {
   appId: number;
   name: string;

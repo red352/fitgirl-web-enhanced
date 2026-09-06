@@ -13,6 +13,7 @@ import type {
   UpcomingItem,
   ArchiveGroup,
   SectionKind,
+  SupportedLanguage,
 } from './types';
 
 export const STORAGE_KEY = 'fitgirl-web-enhanced:v1:layout-mode';
@@ -40,7 +41,7 @@ export function writeLayoutMode(mode: LayoutMode, storage: Storage = window.loca
   try {
     storage.setItem(STORAGE_KEY, mode);
   } catch {
-    // 禁用本地存储时仍允许当前页面正常切换。
+    // Allow layout toggle in current session even if local storage is restricted.
   }
 }
 
@@ -123,8 +124,8 @@ export function extractFacts(infoBlock: Element | null): GameFact[] {
 }
 
 /**
- * 穿透检测内容包装层（如 FitGirl Pink Paw 装饰 div、自定义分节包装等），
- * 返回文章内容真实展平的块级子元素序列与包装容器引用。
+ * Pierces decorative wrappers (e.g., FitGirl Pink Paw decoration div, custom section wrappers)
+ * and returns flattened block-level child elements along with wrapper references.
  */
 export function getEntryContentNodes(entry: HTMLElement): {
   nodes: HTMLElement[];
@@ -190,7 +191,7 @@ function collectSections(
     while (end < children.length) {
       const candidate = children[end];
       if (!candidate || classifySectionHeading(candidate)) break;
-      // 遇到独立的 Game Description 剧透块时才结束当前 section
+      // Terminate current section when encountering a standalone Game Description spoiler
       if (candidate.matches('.su-spoiler')) {
         const titleText = normalizeText(candidate.querySelector('.su-spoiler-title')?.textContent);
         if (/game\s+description/i.test(titleText)) {
@@ -209,7 +210,7 @@ function collectSections(
     index = end - 1;
   }
 
-  // 单独精准寻找 Game Description 剧透块
+  // Precisely find dedicated Game Description spoiler block
   for (const child of children) {
     if (child.matches('.su-spoiler')) {
       const titleText = normalizeText(child.querySelector('.su-spoiler-title')?.textContent);
@@ -220,7 +221,7 @@ function collectSections(
     }
   }
 
-  // 兜底：若未匹配到明确的 Game Description，选择未被 downloads 占用的最后一个 su-spoiler
+  // Fallback: If no explicit Game Description matched, select the last spoiler not claimed by downloads
   if (!sections.has('description')) {
     const downloadsNodes = sections.get('downloads')?.nodes ?? [];
     const allSpoilers = [...entry.querySelectorAll<HTMLElement>('.su-spoiler')];
@@ -517,13 +518,13 @@ export function parseDateString(str: string): Date | null {
   if (!str) return null;
   const trimmed = str.trim();
 
-  // 1. ISO 8601 或带有时间戳的 YYYY-MM-DD
+  // 1. ISO 8601 or YYYY-MM-DD timestamp
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
     const d = new Date(trimmed);
     if (!Number.isNaN(d.getTime())) return d;
   }
 
-  // 2. 欧洲制 DD/MM/YYYY 或 DD.MM.YYYY 或 DD-MM-YYYY
+  // 2. European formats DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY
   const dmyMatch = trimmed.match(
     /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/,
   );
@@ -538,7 +539,7 @@ export function parseDateString(str: string): Date | null {
     if (!Number.isNaN(d.getTime())) return d;
   }
 
-  // 3. 英文月份（如 "September 2, 2026"、"02 Sep 2026"）
+  // 3. Named month formats (e.g. "September 2, 2026", "02 Sep 2026")
   const fallback = new Date(trimmed);
   if (!Number.isNaN(fallback.getTime())) return fallback;
 
@@ -576,11 +577,19 @@ export function parseArticleDate(
   return null;
 }
 
-export function formatRelativeTime(targetDate: Date, now: Date = new Date()): string {
+export function formatRelativeTime(
+  date: Date | string,
+  now: Date = new Date(),
+  lang: SupportedLanguage = 'en',
+): string {
+  const targetDate = typeof date === 'string' ? parseDateString(date) : date;
+  if (!targetDate || Number.isNaN(targetDate.getTime())) return '';
+
   const diffMs = now.getTime() - targetDate.getTime();
+  const isZh = lang === 'zh-CN';
 
   if (diffMs <= 0) {
-    return 'Today';
+    return isZh ? '今天' : 'Today';
   }
 
   const diffHours = diffMs / (1000 * 60 * 60);
@@ -593,25 +602,25 @@ export function formatRelativeTime(targetDate: Date, now: Date = new Date()): st
   const calendarDayDiff = Math.round((todayCalendar - targetCalendar) / 86400000);
 
   if (calendarDayDiff <= 0 || diffHours < 18) {
-    return 'Today';
+    return isZh ? '今天' : 'Today';
   }
 
   if (calendarDayDiff === 1 || (diffHours >= 18 && diffHours < 42)) {
-    return 'Yesterday';
+    return isZh ? '昨天' : 'Yesterday';
   }
 
   const days = Math.max(2, Math.floor(diffHours / 24));
   if (days < 7) {
-    return `${days}d ago`;
+    return isZh ? `${days}天前` : `${days}d ago`;
   }
   if (days < 30) {
     const weeks = Math.floor(days / 7);
-    return `${weeks}w ago`;
+    return isZh ? `${weeks}周前` : `${weeks}w ago`;
   }
   if (days < 365) {
     const months = Math.floor(days / 30);
-    return `${months}mo ago`;
+    return isZh ? `${months}个月前` : `${months}mo ago`;
   }
   const years = Math.floor(days / 365);
-  return `${years}y ago`;
+  return isZh ? `${years}年前` : `${years}y ago`;
 }

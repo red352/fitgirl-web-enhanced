@@ -28,8 +28,8 @@ function mount(markup: string): void {
   document.body.innerHTML = markup;
 }
 
-describe('DOM 解析', () => {
-  it('解析详情文章、媒体和合并下载区', () => {
+describe('DOM Parsing', () => {
+  it('parses detail article, media, and merged download section', () => {
     mount(gameArticle);
     document.body.className = 'single single-post';
     const root = document.querySelector('article');
@@ -43,7 +43,7 @@ describe('DOM 解析', () => {
     expect(parsed.media.at(-1)?.video).toBeInstanceOf(HTMLVideoElement);
   });
 
-  it('正确穿透解析带 Pink Paw 包装层的文章、识别奖项并提取全部区段', () => {
+  it('correctly traverses articles wrapped in Pink Paw layers, identifies award, and extracts all sections', () => {
     mount(pinkPawGameArticle);
     const root = document.querySelector('article') as HTMLElement;
     const parsed = parseArticle(root, 'single');
@@ -60,7 +60,7 @@ describe('DOM 解析', () => {
     expect(parsed.wrapperContainers).toHaveLength(1);
   });
 
-  it('无法解析的特殊文章保持为保守类型', () => {
+  it('preserves conservative type for non-game special articles', () => {
     mount(specialArticle);
     const root = document.querySelector('article') as HTMLElement;
     const parsed = parseArticle(root, 'listing');
@@ -69,7 +69,7 @@ describe('DOM 解析', () => {
     expect(parsed.infoBlock).toBeNull();
   });
 
-  it('搜索结果的 entry-summary 复用游戏卡片解析', () => {
+  it('reuses game card parser for entry-summary on search results', () => {
     mount(gameArticle.replaceAll('entry-content', 'entry-summary'));
     document.body.className = 'search search-results';
     const parsed = parseArticle(document.querySelector('article') as HTMLElement, 'listing');
@@ -78,7 +78,7 @@ describe('DOM 解析', () => {
     expect(parsed.media).toHaveLength(4);
   });
 
-  it('解析搜索摘要中被压在同一行的游戏字段', () => {
+  it('parses compressed single-line fact fields in search excerpts', () => {
     mount(
       '<p id="summary">#7122 Big Ambitions Genres/Tags: Managerial, Top-down, 3D Company: Hovgaard Games Languages: RUS/ENG/MULTI122 Original Size: 6.2 GB Repack Size: 1.6 GB Download Mirrors (Direct Links)</p>',
     );
@@ -91,7 +91,7 @@ describe('DOM 解析', () => {
     ]);
   });
 
-  it('缺少封面和截图时仍保留可解析的游戏信息', () => {
+  it('preserves parsed game facts when cover and screenshots are missing', () => {
     mount(`
       <article class="hentry">
         <header class="entry-header"><h2 class="entry-title">Coverless Game</h2></header>
@@ -107,20 +107,20 @@ describe('DOM 解析', () => {
     expect(parsed.media).toHaveLength(0);
   });
 
-  it('同时按标题语义识别栏目', () => {
+  it('classifies sections by semantic heading content', () => {
     const heading = document.createElement('h3');
     heading.textContent = 'Download Mirrors (Torrent)';
     expect(classifySectionHeading(heading)).toBe('downloads');
   });
 
-  it('按 title、alt 和安全回退解析热门榜单', () => {
+  it('parses popular items by title, alt, and safe fallbacks', () => {
     mount(popularWidget);
     expect(parsePopularItems(document.querySelector('#block-2')).map((item) => item.title)).toEqual(
       ['Popular One', 'Popular Two', 'Popular repack 3'],
     );
   });
 
-  it('保留导航层级并按年份解析月度归档', () => {
+  it('preserves navigation hierarchy and parses monthly archives by year', () => {
     mount(`${siteHeader}${archiveWidget}`);
     const navigation = parseNavigation(document.querySelector('#site-header-menu'));
     expect(navigation).toHaveLength(5);
@@ -130,7 +130,7 @@ describe('DOM 解析', () => {
     expect(archives[0]?.items[0]).toMatchObject({ label: 'September 2026', count: '7' });
   });
 
-  it('解析文本列表与链接格式的 Upcoming Repacks', () => {
+  it('parses Upcoming Repacks in both text list and linked formats', () => {
     mount(`
       <div class="entry-content">
         <style>.wplp_outside { border: 1px; }</style>
@@ -150,13 +150,13 @@ describe('DOM 解析', () => {
   });
 });
 
-describe('状态与恢复', () => {
-  it('损坏的持久化值回退增强布局', () => {
+describe('State and Restoration', () => {
+  it('falls back to enhanced layout for corrupted stored values', () => {
     localStorage.setItem(STORAGE_KEY, 'broken');
     expect(readLayoutMode()).toBe('enhanced');
   });
 
-  it('恢复节点顺序、属性、类和生成节点', () => {
+  it('restores node order, attributes, classes, and removes generated elements', () => {
     mount('<div id="source"><i id="a"></i><i id="b"></i></div><div id="target"></div>');
     const source = document.querySelector('#source') as HTMLElement;
     const target = document.querySelector('#target') as HTMLElement;
@@ -174,8 +174,8 @@ describe('状态与恢复', () => {
     expect(generated.isConnected).toBe(false);
   });
 
-  it('准确解析 FitGirl 特有的欧洲日期格式与嵌套 time 元素', () => {
-    // 1. 真实站点的 span.entry-date 内嵌 time[datetime]
+  it('accurately parses FitGirl European date formats and nested time elements', () => {
+    // 1. span.entry-date with nested time[datetime]
     mount(
       '<header class="entry-header"><span class="entry-date"><a href="#"><time class="entry-date" datetime="2026-09-03T05:24:01+03:00">03/09/2026</time></a></span></header>',
     );
@@ -184,44 +184,49 @@ describe('状态与恢复', () => {
     const parsed = parseArticleDate(spanDate, header);
     expect(parsed).not.toBeNull();
     expect(parsed?.getFullYear()).toBe(2026);
-    expect(parsed?.getMonth()).toBe(8); // 9月（0-indexed 8）
+    expect(parsed?.getMonth()).toBe(8); // September (0-indexed 8)
     expect(parsed?.getDate()).toBe(3);
 
-    // 2. 纯 DD/MM/YYYY 文本格式（非 ISO，易被当成 MM/DD/YYYY 的陷阱）
+    // 2. Pure DD/MM/YYYY text format
     const parsedDmy = parseDateString('03/09/2026');
     expect(parsedDmy).not.toBeNull();
     expect(parsedDmy?.getFullYear()).toBe(2026);
     expect(parsedDmy?.getMonth()).toBe(8); // September
     expect(parsedDmy?.getDate()).toBe(3);
 
-    // 3. 英文月份文本
+    // 3. English month text
     const parsedEng = parseDateString('September 2, 2026');
     expect(parsedEng).not.toBeNull();
     expect(parsedEng?.getMonth()).toBe(8);
     expect(parsedEng?.getDate()).toBe(2);
   });
 
-  it('相对时间根据日历天与发布时差准确生成，杜绝错算', () => {
+  it('generates localized relative times accurately based on calendar days and post delta', () => {
     const fixedNow = new Date('2026-09-03T12:00:00Z');
 
-    // 5 小时前（当天发布） -> Today
+    // 5 hours ago (posted today) -> Today / 今天
     const todayPost = new Date('2026-09-03T07:00:00Z');
-    expect(formatRelativeTime(todayPost, fixedNow)).toBe('Today');
+    expect(formatRelativeTime(todayPost, fixedNow, 'en')).toBe('Today');
+    expect(formatRelativeTime(todayPost, fixedNow, 'zh-CN')).toBe('今天');
 
-    // 26 小时前（昨天发布） -> Yesterday
+    // 26 hours ago (posted yesterday) -> Yesterday / 昨天
     const yesterdayPost = new Date('2026-09-02T10:00:00Z');
-    expect(formatRelativeTime(yesterdayPost, fixedNow)).toBe('Yesterday');
+    expect(formatRelativeTime(yesterdayPost, fixedNow, 'en')).toBe('Yesterday');
+    expect(formatRelativeTime(yesterdayPost, fixedNow, 'zh-CN')).toBe('昨天');
 
-    // 3 天前 -> 3d ago
+    // 3 days ago -> 3d ago / 3天前
     const threeDaysAgo = new Date('2026-08-31T10:00:00Z');
-    expect(formatRelativeTime(threeDaysAgo, fixedNow)).toBe('3d ago');
+    expect(formatRelativeTime(threeDaysAgo, fixedNow, 'en')).toBe('3d ago');
+    expect(formatRelativeTime(threeDaysAgo, fixedNow, 'zh-CN')).toBe('3天前');
 
-    // 10 天前 -> 1w ago
+    // 10 days ago -> 1w ago / 1周前
     const tenDaysAgo = new Date('2026-08-24T10:00:00Z');
-    expect(formatRelativeTime(tenDaysAgo, fixedNow)).toBe('1w ago');
+    expect(formatRelativeTime(tenDaysAgo, fixedNow, 'en')).toBe('1w ago');
+    expect(formatRelativeTime(tenDaysAgo, fixedNow, 'zh-CN')).toBe('1周前');
 
-    // 6 个月前 -> 6mo ago
+    // 6 months ago -> 6mo ago / 6个月前
     const sixMonthsAgo = new Date('2026-03-03T10:00:00Z');
-    expect(formatRelativeTime(sixMonthsAgo, fixedNow)).toBe('6mo ago');
+    expect(formatRelativeTime(sixMonthsAgo, fixedNow, 'en')).toBe('6mo ago');
+    expect(formatRelativeTime(sixMonthsAgo, fixedNow, 'zh-CN')).toBe('6个月前');
   });
 });

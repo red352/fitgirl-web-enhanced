@@ -40,7 +40,7 @@ export function createIcon(name: keyof typeof paths, className = ''): SVGSVGElem
   wrapper.innerHTML = `<svg class="fwe-icon ${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;
   const icon = wrapper.firstElementChild;
   if (!(icon instanceof SVGSVGElement)) {
-    throw new Error(`无法创建图标：${name}`);
+    throw new Error(`Failed to create icon: ${name}`);
   }
   return icon;
 }

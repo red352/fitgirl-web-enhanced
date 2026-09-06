@@ -9,16 +9,17 @@ import {
   translateScoreDesc,
 } from '../src/rating';
 import { RatingPopover } from '../src/ui';
+import { setActiveLanguage } from '../src/i18n';
 import type { GameRatingData } from '../src/types';
 
-describe('游戏评分模块（Rating Engine）', () => {
-  describe('cleanTitleBase 标题清洗', () => {
-    it('去除 FitGirl Repack 编号前缀', () => {
+describe('Rating Engine', () => {
+  describe('cleanTitleBase title sanitization', () => {
+    it('removes FitGirl repack number prefixes', () => {
       expect(cleanTitleBase('#1500 Red Dead Redemption 2')).toBe('Red Dead Redemption 2');
       expect(cleanTitleBase('#42 The Witcher 3')).toBe('The Witcher 3');
     });
 
-    it('去除破折号后的版本、更新及 DLC 注释', () => {
+    it('strips post-dash version, update, and DLC annotations', () => {
       expect(cleanTitleBase('Elden Ring: Shadow of the Erdtree Edition – v1.12.3 + All DLCs')).toBe(
         'Elden Ring: Shadow of the Erdtree Edition',
       );
@@ -27,7 +28,7 @@ describe('游戏评分模块（Rating Engine）', () => {
       );
     });
 
-    it('去除独立的构建号与版本标识', () => {
+    it('removes standalone build numbers and version markers', () => {
       expect(cleanTitleBase('Harvest Moon: Home Sweet Home Special Edition v1.1')).toBe(
         'Harvest Moon: Home Sweet Home Special Edition',
       );
@@ -37,13 +38,13 @@ describe('游戏评分模块（Rating Engine）', () => {
       expect(cleanTitleBase('My Dream Setup Build 24206446')).toBe('My Dream Setup');
     });
 
-    it('去除方括号与圆括号注记', () => {
+    it('removes bracketed and parenthesized tags', () => {
       expect(cleanTitleBase('Grand Theft Auto V [FitGirl Repack] (MULTi8)')).toBe(
         'Grand Theft Auto V',
       );
     });
 
-    it('清洗复杂组合修饰词（Dragon’s Dogma 2, Hollowbody, 智能弯引号、星号与附属包）', () => {
+    it('sanitizes complex modifier combinations (Dragon’s Dogma 2, Hollowbody, curly quotes, asterisks, bundles)', () => {
       expect(
         cleanTitleBase(
           'Dragon’s Dogma 2: Deluxe Edition* – v3.2 (Denuvoless) + All DLCs* + Bonus OST',
@@ -60,8 +61,8 @@ describe('游戏评分模块（Rating Engine）', () => {
     });
   });
 
-  describe('generateTitleCandidates 多级候选词生成', () => {
-    it('处理多别名斜杠拆分', () => {
+  describe('generateTitleCandidates multi-tier candidate generation', () => {
+    it('handles multiple aliases split by slashes', () => {
       const candidates = generateTitleCandidates(
         'Grand Theft Auto V / GTA V – v1.0.3095 / v1.68 Online',
       );
@@ -69,13 +70,13 @@ describe('游戏评分模块（Rating Engine）', () => {
       expect(candidates).toContain('GTA V');
     });
 
-    it('剥除常见 Edition 版本尾缀并优先生成基础游戏名', () => {
+    it('strips common Edition suffixes and prioritizes base game names', () => {
       const candidates = generateTitleCandidates('Red Dead Redemption 2: Ultimate Edition');
       expect(candidates).toContain('Red Dead Redemption 2: Ultimate Edition');
       expect(candidates).toContain('Red Dead Redemption 2');
     });
 
-    it('为复杂游戏名生成精准基础游戏候选词（Dragon’s Dogma 2 与 The Blood of Dawnwalker）', () => {
+    it('generates accurate base game candidates for complex game titles', () => {
       const ddCandidates = generateTitleCandidates(
         'Dragon’s Dogma 2: Deluxe Edition* – v3.2 (Denuvoless) + All DLCs* + Bonus OST',
       );
@@ -85,32 +86,32 @@ describe('游戏评分模块（Rating Engine）', () => {
       expect(dawnCandidates).toContain('The Blood of Dawnwalker');
     });
 
-    it('处理带副标题的主标题回退', () => {
+    it('handles subtitle fallback to main title', () => {
       const candidates = generateTitleCandidates('Elden Ring: Shadow of the Erdtree');
       expect(candidates).toContain('Elden Ring: Shadow of the Erdtree');
       expect(candidates).toContain('Elden Ring');
     });
   });
 
-  describe('calculateTitleSimilarity 相似度算法', () => {
-    it('完全一致或标点大小写忽略后返回 1.0', () => {
+  describe('calculateTitleSimilarity string matching algorithm', () => {
+    it('returns 1.0 for exact matches or matches ignoring punctuation/case', () => {
       expect(calculateTitleSimilarity('Elden Ring', 'ELDEN RING')).toBe(1.0);
       expect(calculateTitleSimilarity('The Witcher 3', 'The Witcher 3™')).toBe(1.0);
     });
 
-    it('前缀/包含关系返回较高相似度', () => {
+    it('returns high similarity for prefix and substring inclusions', () => {
       const sim = calculateTitleSimilarity('Grand Theft Auto V', 'Grand Theft Auto V Enhanced');
       expect(sim).toBeGreaterThanOrEqual(0.8);
     });
 
-    it('无关游戏返回低相似度', () => {
+    it('returns low similarity for unrelated games', () => {
       const sim = calculateTitleSimilarity('Doom Eternal', 'Animal Crossing');
       expect(sim).toBeLessThan(0.3);
     });
   });
 
-  describe('extractSteamAppIdFromElement DOM 指纹提取', () => {
-    it('从文章内链接中精准提取 Steam AppID', () => {
+  describe('extractSteamAppIdFromElement DOM fingerprinting', () => {
+    it('extracts Steam AppID accurately from article hyperlinks', () => {
       const div = document.createElement('div');
       div.innerHTML = `
         <p>Official site: <a href="https://store.steampowered.com/app/1245620/ELDEN_RING/">Steam Store</a></p>
@@ -118,14 +119,14 @@ describe('游戏评分模块（Rating Engine）', () => {
       expect(extractSteamAppIdFromElement(div)).toBe(1245620);
     });
 
-    it('无相关链接时返回 null', () => {
+    it('returns null when no matching links are present', () => {
       const div = document.createElement('div');
       div.innerHTML = `<p>No external links</p>`;
       expect(extractSteamAppIdFromElement(div)).toBeNull();
     });
   });
 
-  describe('RatingCache 本地缓存', () => {
+  describe('RatingCache local storage cache', () => {
     let cache: RatingCache;
 
     beforeEach(() => {
@@ -133,7 +134,7 @@ describe('游戏评分模块（Rating Engine）', () => {
       cache = new RatingCache();
     });
 
-    it('正确存取并持久化评分数据', () => {
+    it('stores, retrieves, and persists rating data correctly', () => {
       const sampleData: GameRatingData = {
         appId: 1245620,
         name: 'ELDEN RING',
@@ -154,12 +155,12 @@ describe('游戏评分模块（Rating Engine）', () => {
       expect(cached?.data?.appId).toBe(1245620);
       expect(cached?.data?.positivePercent).toBe(93);
 
-      // 验证 localStorage 同步写入
+      // Verify localStorage persistence
       const raw = window.localStorage.getItem(`${RATING_CACHE_PREFIX}elden ring`);
       expect(raw).toBeTruthy();
     });
 
-    it('过期缓存被自动失效', () => {
+    it('automatically invalidates expired cache entries', () => {
       const sampleData: GameRatingData = {
         appId: 100,
         name: 'Old Game',
@@ -172,7 +173,7 @@ describe('游戏评分模块（Rating Engine）', () => {
         steamDbUrl: 'https://steamdb.info/app/100/',
       };
 
-      // 模拟 10 天前的缓存数据
+      // Simulate cache entry from 10 days ago
       const tenDaysAgo = Date.now() - 10 * 24 * 60 * 60 * 1000;
       window.localStorage.setItem(
         `${RATING_CACHE_PREFIX}old game`,
@@ -183,7 +184,7 @@ describe('游戏评分模块（Rating Engine）', () => {
       expect(cached).toBeNull();
     });
 
-    it('delete 方法正确清除内存与 localStorage 缓存（用于强制刷新）', () => {
+    it('deletes entries from both memory and localStorage cache for force refresh', () => {
       const sampleData: GameRatingData = {
         appId: 1245620,
         name: 'ELDEN RING',
@@ -206,18 +207,24 @@ describe('游戏评分模块（Rating Engine）', () => {
     });
   });
 
-  describe('translateScoreDesc 评价层级本地化', () => {
-    it('正确翻译 Steam 经典评价词', () => {
+  describe('translateScoreDesc score description localization', () => {
+    it('correctly translates Steam score descriptions in both English and Chinese', () => {
+      // Default (Chinese fallback or zh-CN)
       expect(translateScoreDesc('Overwhelmingly Positive')).toBe('好评如潮');
       expect(translateScoreDesc('Very Positive')).toBe('特别好评');
       expect(translateScoreDesc('Mixed')).toBe('褒贬不一');
       expect(translateScoreDesc('Mostly Negative')).toBe('多半差评');
       expect(translateScoreDesc('Unknown Score')).toBe('Unknown Score');
+
+      // English mode
+      expect(translateScoreDesc('Overwhelmingly Positive', 'en')).toBe('Overwhelmingly Positive');
+      expect(translateScoreDesc('特别好评', 'en')).toBe('Very Positive');
+      expect(translateScoreDesc('特别好评', 'zh-CN')).toBe('特别好评');
     });
   });
 
-  describe('RatingPopover 与徽章状态交互', () => {
-    it('Popover 支持展示已匹配评分、Metascore 与强制刷新按钮', () => {
+  describe('RatingPopover and badge interactions', () => {
+    it('renders matched rating view, Metascore, and handles refresh action', () => {
       const popover = new RatingPopover();
       const anchor = document.createElement('div');
       document.body.append(anchor);
@@ -258,7 +265,8 @@ describe('游戏评分模块（Rating Engine）', () => {
       popover.destroy();
     });
 
-    it('Popover 支持未收录状态展示并提供 Steam 搜索与重新查询操作', () => {
+    it('renders unmatched view and supports language updates, Steam search, and query retry', () => {
+      setActiveLanguage('en');
       const popover = new RatingPopover();
       const anchor = document.createElement('div');
       document.body.append(anchor);
@@ -269,7 +277,7 @@ describe('游戏评分模块（Rating Engine）', () => {
       });
 
       const popoverEl = document.querySelector('.fwe-rating-popover') as HTMLElement;
-      expect(popoverEl.querySelector('.fwe-rating-popover__appid')?.textContent).toBe('未收录');
+      expect(popoverEl.querySelector('.fwe-rating-popover__appid')?.textContent).toBe('Unmatched');
       expect(popoverEl.querySelector('.fwe-rating-popover__title')?.textContent).toBe(
         'Some Obscure Indie Game',
       );
@@ -278,6 +286,12 @@ describe('游戏评分模块（Rating Engine）', () => {
         '.fwe-rating-popover__actions a[href*="store.steampowered.com/search"]',
       );
       expect(steamSearchLink).not.toBeNull();
+      expect(steamSearchLink?.textContent).toBe('Steam Search');
+
+      // Test dynamic language switching to Chinese
+      setActiveLanguage('zh-CN');
+      popover.updateLanguage();
+      expect(popoverEl.querySelector('.fwe-rating-popover__appid')?.textContent).toBe('未收录');
       expect(steamSearchLink?.textContent).toBe('Steam 搜索');
 
       const retryBtn = popoverEl.querySelector<HTMLButtonElement>(

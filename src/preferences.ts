@@ -2,18 +2,24 @@ import { STORAGE_KEY } from './dom';
 import type {
   LayoutMode,
   StoredInfiniteScrollPreference,
+  StoredLanguagePreference,
   StoredLayoutPreference,
   StoredMediaPreference,
   StoredShowRatingsPreference,
+  SupportedLanguage,
 } from './types';
 
 export const MEDIA_EXPAND_STORAGE_KEY = 'fitgirl-web-enhanced:v1:media-expand';
 export const INFINITE_SCROLL_STORAGE_KEY = 'fitgirl-web-enhanced:v1:infinite-scroll';
 export const SHOW_RATINGS_STORAGE_KEY = 'fitgirl-web-enhanced:v1:show-ratings';
+export const LANGUAGE_STORAGE_KEY = 'fitgirl-web-enhanced:v1:language';
+
 const TIMESTAMP_KEY = `${STORAGE_KEY}:updated-at`;
 const MEDIA_TIMESTAMP_KEY = `${MEDIA_EXPAND_STORAGE_KEY}:updated-at`;
 const INFINITE_SCROLL_TIMESTAMP_KEY = `${INFINITE_SCROLL_STORAGE_KEY}:updated-at`;
 const SHOW_RATINGS_TIMESTAMP_KEY = `${SHOW_RATINGS_STORAGE_KEY}:updated-at`;
+const LANGUAGE_TIMESTAMP_KEY = `${LANGUAGE_STORAGE_KEY}:updated-at`;
+
 const DATABASE_NAME = 'fitgirl-web-enhanced';
 const STORE_NAME = 'preferences';
 
@@ -62,6 +68,18 @@ function asShowRatingsPreference(
   };
 }
 
+function asLanguagePreference(
+  language: string | null,
+  updatedAt: string | null,
+): StoredLanguagePreference | null {
+  if (language !== 'en' && language !== 'zh-CN') return null;
+  const timestamp = Number(updatedAt);
+  return {
+    language,
+    updatedAt: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0,
+  };
+}
+
 function readLocal(): StoredLayoutPreference | null {
   try {
     return asPreference(
@@ -78,7 +96,7 @@ function writeLocal(value: StoredLayoutPreference): void {
     window.localStorage.setItem(STORAGE_KEY, value.mode);
     window.localStorage.setItem(TIMESTAMP_KEY, String(value.updatedAt));
   } catch {
-    // 同源存储被禁用时，IndexedDB 仍可作为回退。
+    // When same-origin storage is disabled, IndexedDB still acts as a fallback.
   }
 }
 
@@ -98,7 +116,7 @@ function writeLocalMedia(value: StoredMediaPreference): void {
     window.localStorage.setItem(MEDIA_EXPAND_STORAGE_KEY, String(value.expanded));
     window.localStorage.setItem(MEDIA_TIMESTAMP_KEY, String(value.updatedAt));
   } catch {
-    // 同源存储被禁用时，IndexedDB 仍可作为回退。
+    // When same-origin storage is disabled, IndexedDB still acts as a fallback.
   }
 }
 
@@ -118,7 +136,7 @@ function writeLocalInfiniteScroll(value: StoredInfiniteScrollPreference): void {
     window.localStorage.setItem(INFINITE_SCROLL_STORAGE_KEY, String(value.enabled));
     window.localStorage.setItem(INFINITE_SCROLL_TIMESTAMP_KEY, String(value.updatedAt));
   } catch {
-    // 同源存储被禁用时，IndexedDB 仍可作为回退。
+    // When same-origin storage is disabled, IndexedDB still acts as a fallback.
   }
 }
 
@@ -138,7 +156,27 @@ function writeLocalShowRatings(value: StoredShowRatingsPreference): void {
     window.localStorage.setItem(SHOW_RATINGS_STORAGE_KEY, String(value.enabled));
     window.localStorage.setItem(SHOW_RATINGS_TIMESTAMP_KEY, String(value.updatedAt));
   } catch {
-    // 同源存储被禁用时，IndexedDB 仍可作为回退。
+    // When same-origin storage is disabled, IndexedDB still acts as a fallback.
+  }
+}
+
+function readLocalLanguage(): StoredLanguagePreference | null {
+  try {
+    return asLanguagePreference(
+      window.localStorage.getItem(LANGUAGE_STORAGE_KEY),
+      window.localStorage.getItem(LANGUAGE_TIMESTAMP_KEY),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalLanguage(value: StoredLanguagePreference): void {
+  try {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, value.language);
+    window.localStorage.setItem(LANGUAGE_TIMESTAMP_KEY, String(value.updatedAt));
+  } catch {
+    // When same-origin storage is disabled, IndexedDB still acts as a fallback.
   }
 }
 
@@ -374,6 +412,59 @@ async function writeIndexedShowRatings(value: StoredShowRatingsPreference): Prom
   });
 }
 
+async function readIndexedLanguage(): Promise<StoredLanguagePreference | null> {
+  const database = await openDatabase();
+  if (!database) return null;
+  return new Promise((resolve) => {
+    try {
+      const transaction = database.transaction(STORE_NAME, 'readonly');
+      const request = transaction.objectStore(STORE_NAME).get(LANGUAGE_STORAGE_KEY);
+      request.onsuccess = () => {
+        const value = request.result as Partial<StoredLanguagePreference> | undefined;
+        database.close();
+        resolve(
+          value && (value.language === 'en' || value.language === 'zh-CN') && Number.isFinite(value.updatedAt)
+            ? { language: value.language, updatedAt: value.updatedAt ?? 0 }
+            : null,
+        );
+      };
+      request.onerror = () => {
+        database.close();
+        resolve(null);
+      };
+    } catch {
+      database.close();
+      resolve(null);
+    }
+  });
+}
+
+async function writeIndexedLanguage(value: StoredLanguagePreference): Promise<void> {
+  const database = await openDatabase();
+  if (!database) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const transaction = database.transaction(STORE_NAME, 'readwrite');
+      transaction.objectStore(STORE_NAME).put(value, LANGUAGE_STORAGE_KEY);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onabort = () => {
+        database.close();
+        resolve();
+      };
+    } catch {
+      database.close();
+      resolve();
+    }
+  });
+}
+
 export function getFastStoredLayoutMode(): LayoutMode {
   const local = readLocal();
   return local ? local.mode : 'enhanced';
@@ -387,6 +478,16 @@ export function getFastStoredMediaExpand(): boolean {
 export function getFastStoredInfiniteScroll(): boolean {
   const local = readLocalInfiniteScroll();
   return local ? local.enabled : true;
+}
+
+export function getFastStoredShowRatings(): boolean {
+  const local = readLocalShowRatings();
+  return local ? local.enabled : true;
+}
+
+export function getFastStoredLanguage(): SupportedLanguage | null {
+  const local = readLocalLanguage();
+  return local ? local.language : null;
 }
 
 export async function readStoredLayoutMode(): Promise<LayoutMode> {
@@ -446,11 +547,6 @@ export async function writeStoredInfiniteScroll(enabled: boolean): Promise<void>
   await writeIndexedInfiniteScroll(value);
 }
 
-export function getFastStoredShowRatings(): boolean {
-  const local = readLocalShowRatings();
-  return local ? local.enabled : true;
-}
-
 export async function readStoredShowRatings(): Promise<boolean> {
   const [local, indexed] = await Promise.all([
     Promise.resolve(readLocalShowRatings()),
@@ -469,4 +565,24 @@ export async function writeStoredShowRatings(enabled: boolean): Promise<void> {
   const value = { enabled, updatedAt: Date.now() } satisfies StoredShowRatingsPreference;
   writeLocalShowRatings(value);
   await writeIndexedShowRatings(value);
+}
+
+export async function readStoredLanguage(): Promise<SupportedLanguage | null> {
+  const [local, indexed] = await Promise.all([
+    Promise.resolve(readLocalLanguage()),
+    readIndexedLanguage(),
+  ]);
+  const selected = [local, indexed]
+    .filter((value): value is StoredLanguagePreference => value !== null)
+    .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+  if (!selected) return null;
+  if (!local || local.language !== selected.language || local.updatedAt !== selected.updatedAt)
+    writeLocalLanguage(selected);
+  return selected.language;
+}
+
+export async function writeStoredLanguage(language: SupportedLanguage): Promise<void> {
+  const value = { language, updatedAt: Date.now() } satisfies StoredLanguagePreference;
+  writeLocalLanguage(value);
+  await writeIndexedLanguage(value);
 }

@@ -1,8 +1,8 @@
-import type { GameRatingData } from './types';
+import type { GameRatingData, SupportedLanguage } from './types';
 
 export const RATING_CACHE_PREFIX = 'fitgirl-web-enhanced:v1:rating:';
-export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 成功匹配缓存 7 天
-export const NEGATIVE_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 未匹配缓存 3 天
+export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // Cache hits for 7 days
+export const NEGATIVE_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000; // Cache misses for 3 days
 
 interface CacheEntry {
   data: GameRatingData | null;
@@ -10,7 +10,7 @@ interface CacheEntry {
 }
 
 /**
- * 从页面 DOM 中快速探测 Steam 链接与 AppID（0ms 快速路径）
+ * Rapidly probes Steam store links and AppIDs directly from element DOM (0ms fast path).
  */
 export function extractSteamAppIdFromElement(element: HTMLElement): number | null {
   const links = element.querySelectorAll<HTMLAnchorElement>(
@@ -29,41 +29,41 @@ export function extractSteamAppIdFromElement(element: HTMLElement): number | nul
 }
 
 /**
- * 智能标题清洗器：剔除 FitGirl 专属修饰符、版本号、构建号、DLC 标签等
+ * Intelligent title sanitizer: strips FitGirl repack numbers, version tags, build numbers, and DLC markers.
  */
 export function cleanTitleBase(raw: string): string {
   let text = raw;
-  // 0. 规范化弯单双引号与特殊标点
+  // 0. Normalize quotes and special punctuation
   text = text.replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
-  // 1. 移除 FitGirl Repack 编号，如 "#1500 "
+  // 1. Remove FitGirl Repack numbers (e.g. "#1500 ")
   text = text.replace(/^#\d+\s+/, '');
-  // 2. 移除破折号之后的所有版本/更新信息（如 " – v1.12.3 + All DLCs"、" - Build 1491.50"）
+  // 2. Remove trailing version/update info after dashes (e.g. " – v1.12.3 + All DLCs", " - Build 1491.50")
   text = text.replace(/\s*[–—-]\s+.*$/, '');
-  // 3. 移除在破折号前或主标题末尾挂载的附属包（如 "+ Soundtrack Bundle", "+ Bonus OST", "+ All DLCs*", "+ Artbook"）
+  // 3. Remove bundled extras attached to the main title (e.g. "+ Soundtrack Bundle", "+ Bonus OST", "+ All DLCs*", "+ Artbook")
   text = text.replace(
     /\s*\+\s*(All DLCs?|DLCs?|Soundtrack( Bundle)?|Bonus OST|OST|Artbook|Goodies|Wallpapers|Score|Expansions?|Add[- ]?ons?)\b.*$/i,
     '',
   );
-  // 4. 移除内联版本号如 "v1.1"、"v2.0.4a"、"Build 12345"
+  // 4. Remove inline version patterns like "v1.1", "v2.0.4a", "Build 12345"
   text = text.replace(/\b(v\d+(\.\d+)*[a-z]?|Build\s+\d+(\.\d+)*)\b/gi, '');
-  // 5. 移除方括号与圆括号注记，如 "[FitGirl Repack]"、"(MULTi8)"、"(Denuvoless)"
+  // 5. Remove brackets and parenthesized annotations (e.g. "[FitGirl Repack]", "(MULTi8)", "(Denuvoless)")
   text = text.replace(/\s*(\[[^\]]*\]|\([^)]*\))\s*/g, ' ');
-  // 6. 移除星号 *（FitGirl 常见注释标号，如 Deluxe Edition*）与其他杂质符号
+  // 6. Remove asterisk * and other noise characters
   text = text.replace(/[*~]/g, '');
-  // 7. 移除尾部可能残留的连字符、加号或逗号
+  // 7. Remove trailing commas, hyphens, plus signs
   text = text.replace(/[\s,+–—-]+$/, '');
   return text.replace(/\s+/g, ' ').trim();
 }
 
 /**
- * 生成多级候选词列表（降级回退）
+ * Generates ranked candidate queries for Steam search fallback.
  */
 export function generateTitleCandidates(raw: string): string[] {
   const candidates: string[] = [];
   const base = cleanTitleBase(raw);
   if (!base) return [];
 
-  // 如果包含斜杠别名（如 "Grand Theft Auto V / GTA V"），拆分为多条候选
+  // If title contains slash aliases (e.g. "Grand Theft Auto V / GTA V"), split into separate candidates
   if (base.includes('/')) {
     const parts = base.split('/').map((p) => p.trim());
     for (const part of parts) {
@@ -73,17 +73,17 @@ export function generateTitleCandidates(raw: string): string[] {
     }
   }
 
-  // 剥除任意特定发行版后缀（如 ": Ultimate Edition", ": Eclipse Edition", "Deluxe Edition", "GOTY Edition" 等）
+  // Strip release edition suffixes (e.g. ": Ultimate Edition", ": Eclipse Edition", "Deluxe Edition", "GOTY Edition")
   const noEdition = base.replace(/[:\-–—]?\s*\b([A-Za-z0-9'’-]+\s+)?Edition\*?\b/gi, '').trim();
   if (noEdition && noEdition !== base && noEdition.length >= 2) {
-    // 优先尝试剔除 Edition 后的纯粹主游戏名（如 "The Blood of Dawnwalker" 或 "Dragon's Dogma 2"）
+    // Prioritize clean base title without edition suffix (e.g. "The Blood of Dawnwalker" or "Dragon's Dogma 2")
     candidates.push(noEdition);
   }
 
-  // 其次尝试带完整名称的基准标题
+  // Next candidate: full cleaned base title
   candidates.push(base);
 
-  // 若带副标题（冒号分隔），提取主标题（如 "Elden Ring: Shadow of the Erdtree" -> "Elden Ring"）
+  // If title contains subtitle separated by colon, extract main title (e.g. "Elden Ring: Shadow of the Erdtree" -> "Elden Ring")
   if (base.includes(':')) {
     const mainTitle = base.split(':')[0]?.trim();
     if (mainTitle && mainTitle.length >= 2 && !candidates.includes(mainTitle)) {
@@ -95,7 +95,7 @@ export function generateTitleCandidates(raw: string): string[] {
 }
 
 /**
- * 标准化文本供相似度比较
+ * Normalizes text for similarity comparison.
  */
 function normalizeForComparison(str: string): string {
   return str
@@ -107,7 +107,7 @@ function normalizeForComparison(str: string): string {
 }
 
 /**
- * 校验标题相似度（Token Jaccard / 子集重合度），防止模糊搜索误匹配无关游戏
+ * Computes title similarity (Token Jaccard / subset overlap) to avoid false matches.
  */
 export function calculateTitleSimilarity(query: string, candidate: string): number {
   const normQ = normalizeForComparison(query);
@@ -133,7 +133,7 @@ export function calculateTitleSimilarity(query: string, candidate: string): numb
 }
 
 /**
- * 发送网络请求（优先使用 GM_xmlhttpRequest 突破 CORS 限制，回退使用 fetch）
+ * Dispatches an HTTP request (prefers GM_xmlhttpRequest to bypass CORS, falls back to fetch).
  */
 export function makeRequest(url: string): Promise<string> {
   const globalScope = globalThis as unknown as {
@@ -173,7 +173,7 @@ export function makeRequest(url: string): Promise<string> {
 }
 
 /**
- * 本地持久化缓存读写
+ * Local persistent cache manager for game ratings.
  */
 export class RatingCache {
   private readonly memory = new Map<string, CacheEntry>();
@@ -200,7 +200,7 @@ export class RatingCache {
       }
       window.localStorage.removeItem(storageKey);
     } catch {
-      // 忽略存储读取异常
+      // Ignore storage read errors
     }
     return null;
   }
@@ -212,7 +212,7 @@ export class RatingCache {
       const storageKey = `${RATING_CACHE_PREFIX}${key}`;
       window.localStorage.setItem(storageKey, JSON.stringify(entry));
     } catch {
-      // 忽略本地存储写入配额异常
+      // Ignore quota exceeded errors
     }
   }
 
@@ -222,7 +222,7 @@ export class RatingCache {
       const storageKey = `${RATING_CACHE_PREFIX}${key}`;
       window.localStorage.removeItem(storageKey);
     } catch {
-      // 忽略本地存储删除异常
+      // Ignore removal errors
     }
   }
 }
@@ -230,9 +230,9 @@ export class RatingCache {
 export const globalRatingCache = new RatingCache();
 
 /**
- * Steam 评价层级英汉映射
+ * Steam rating description mapping (English <-> Simplified Chinese).
  */
-const SCORE_DESC_MAP: Record<string, string> = {
+export const STEAM_SCORE_MAP: Record<string, string> = {
   'Overwhelmingly Positive': '好评如潮',
   'Very Positive': '特别好评',
   Positive: '好评',
@@ -244,8 +244,15 @@ const SCORE_DESC_MAP: Record<string, string> = {
   'Overwhelmingly Negative': '差评如潮',
 };
 
-export function translateScoreDesc(desc: string): string {
-  return SCORE_DESC_MAP[desc] || desc;
+export const CHINESE_TO_STEAM_SCORE_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(STEAM_SCORE_MAP).map(([en, zh]) => [zh, en]),
+);
+
+export function translateScoreDesc(desc: string, lang?: SupportedLanguage): string {
+  if (lang === 'en') {
+    return CHINESE_TO_STEAM_SCORE_MAP[desc] ?? desc;
+  }
+  return STEAM_SCORE_MAP[desc] ?? desc;
 }
 
 interface SteamStoreSearchItem {
@@ -271,7 +278,7 @@ interface SteamReviewsResult {
 }
 
 /**
- * 从 Steam 查询游戏并获取评分
+ * Searches Steam store for matching candidates and extracts base rating data.
  */
 export async function resolveRatingByCandidates(
   candidates: string[],
@@ -282,7 +289,7 @@ export async function resolveRatingByCandidates(
       const text = await makeRequest(url);
       const json = JSON.parse(text) as SteamStoreSearchResult;
       if (json.items && json.items.length > 0) {
-        // 排序：优先将纯粹游戏本体排在 DLC / Soundtrack / Content Pack 前面
+        // Prioritize standalone base game entries over DLC, soundtracks, and expansion packs
         const sortedItems = [...json.items].sort((a, b) => {
           const aIsAddon = /\b(content|dlc|pack|soundtrack|expansion|season pass)\b/i.test(a.name);
           const bIsAddon = /\b(content|dlc|pack|soundtrack|expansion|season pass)\b/i.test(b.name);
@@ -291,7 +298,7 @@ export async function resolveRatingByCandidates(
           return 0;
         });
 
-        // 校验候选词与结果的相似度
+        // Verify similarity between candidate query and matched title
         for (const item of sortedItems.slice(0, 3)) {
           const sim = calculateTitleSimilarity(candidate, item.name);
           if (sim >= 0.35) {
@@ -312,8 +319,8 @@ export async function resolveRatingByCandidates(
 }
 
 /**
- * 根据 AppID 拉取 Steam 玩家好评数据与详情
- * 如果目标 AppID 为 DLC 或附属包，自动通过 appdetails 探测重定向至游戏本体（fullgame）
+ * Fetches Steam player review statistics and metadata by AppID.
+ * If target AppID is DLC or an add-on, automatically traces back to parent full game via appdetails.
  */
 export async function fetchSteamReviews(
   appId: number,
@@ -325,7 +332,7 @@ export async function fetchSteamReviews(
     let targetName = fallbackName || `App ${appId}`;
     let metascore = initialMetascore;
 
-    // 先查询 appdetails 检查是否为 DLC/附加内容，并提取本体 AppID 与 Metacritic 分数
+    // Check appdetails to detect DLC/extras and resolve parent game AppID and Metacritic score
     try {
       const detailsUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
       const detailsText = await makeRequest(detailsUrl);
@@ -333,7 +340,6 @@ export async function fetchSteamReviews(
       const detailsJson = JSON.parse(detailsText) as Record<string, any>;
       const appData = detailsJson?.[String(appId)]?.data;
       if (appData) {
-        // 若为 DLC，提取其 fullgame 本体 AppID
         if (appData.type === 'dlc' || appData.type === 'music' || appData.fullgame?.appid) {
           if (appData.fullgame?.appid) {
             targetAppId = Number.parseInt(appData.fullgame.appid, 10);
@@ -350,10 +356,10 @@ export async function fetchSteamReviews(
         }
       }
     } catch {
-      // 忽略详情探测失败，降级直接查询原 AppID reviews
+      // Fallback directly to querying review API with initial AppID
     }
 
-    const url = `https://store.steampowered.com/appreviews/${targetAppId}?json=1&language=all&l=schinese&purchase_type=all&num_per_page=0`;
+    const url = `https://store.steampowered.com/appreviews/${targetAppId}?json=1&language=all&purchase_type=all&num_per_page=0`;
     const text = await makeRequest(url);
     const json = JSON.parse(text) as SteamReviewsResult;
     const summary = json.query_summary;
@@ -363,13 +369,14 @@ export async function fetchSteamReviews(
     }
 
     const positivePercent = Math.round((summary.total_positive / summary.total_reviews) * 100);
-    const scoreDesc = translateScoreDesc(summary.review_score_desc);
+    // Standardize scoreDesc in English (e.g. 'Very Positive')
+    const rawScoreDesc = summary.review_score_desc;
 
     return {
       appId: targetAppId,
       name: targetName,
       positivePercent,
-      scoreDesc,
+      scoreDesc: rawScoreDesc,
       totalReviews: summary.total_reviews,
       totalPositive: summary.total_positive,
       totalNegative: summary.total_negative,
@@ -387,7 +394,7 @@ export async function fetchSteamReviews(
 }
 
 /**
- * 综合入口：解析并获取文章对应游戏的评分
+ * Unified entry point: resolves and fetches Steam rating data for an article title.
  */
 export async function getGameRating(
   title: string,
@@ -408,12 +415,12 @@ export async function getGameRating(
   let gameName = title;
   let metascore: number | undefined;
 
-  // Tier 1: 检查 DOM 内是否有现成的 Steam 链接
+  // Tier 1: Check element DOM for existing Steam store link
   if (articleRoot) {
     appId = extractSteamAppIdFromElement(articleRoot);
   }
 
-  // Tier 2 & 3: 若无直接链接，执行候选词搜索
+  // Tier 2 & 3: If no link in DOM, search candidate titles
   if (!appId) {
     const candidates = generateTitleCandidates(title);
     const match = await resolveRatingByCandidates(candidates);
@@ -429,14 +436,14 @@ export async function getGameRating(
     return null;
   }
 
-  // Tier 5: 拉取评测详情（包含 DLC 自动重定向至本体游戏）
+  // Tier 5: Fetch review details (resolves DLC to parent game when appropriate)
   const ratingData = await fetchSteamReviews(appId, gameName, metascore);
   globalRatingCache.set(cacheKey, ratingData);
   return ratingData;
 }
 
 /**
- * 请求并发节流队列（防止瞬间大量请求触发 Steam 429）
+ * Concurrency throttling queue to prevent Steam API rate limiting (HTTP 429).
  */
 export class RequestQueue {
   private readonly queue: Array<() => Promise<void>> = [];

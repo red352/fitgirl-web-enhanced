@@ -8,25 +8,26 @@ const rootDir = resolve(import.meta.dirname, '..');
 const pkgPath = resolve(rootDir, 'package.json');
 const lockPath = resolve(rootDir, 'package-lock.json');
 const readmePath = resolve(rootDir, 'README.md');
+const readmeZhPath = resolve(rootDir, 'README.zh-CN.md');
 
-// 1. 读取当前 package.json
+// 1. Read current package.json
 const pkgRaw = readFileSync(pkgPath, 'utf8');
 const pkg = JSON.parse(pkgRaw);
 const currentVersion = pkg.version;
 
-// 2. 解析目标版本参数
+// 2. Parse target version argument
 const targetArg = process.argv[2];
 if (!targetArg) {
-  console.error('❌ 请提供目标版本或升级类型！');
-  console.error('用法: npm run bump <patch | minor | major | x.y.z>');
-  console.error(`当前版本: ${currentVersion}`);
+  console.error('❌ Please provide target version or release type!');
+  console.error('Usage: npm run bump <patch | minor | major | x.y.z>');
+  console.error(`Current version: ${currentVersion}`);
   process.exit(1);
 }
 
 function computeNextVersion(current, type) {
   const parts = current.split('.').map((n) => Number.parseInt(n, 10));
   if (parts.length < 3 || parts.some((n) => !Number.isFinite(n))) {
-    throw new Error(`当前版本号格式不合法: ${current}`);
+    throw new Error(`Invalid current version format: ${current}`);
   }
   let [major, minor, patch] = parts;
   if (type === 'patch') {
@@ -42,7 +43,7 @@ function computeNextVersion(current, type) {
     return type;
   } else {
     throw new Error(
-      `未知的版本升级类型或不合法的版本号: ${type}（仅支持 patch, minor, major 或 x.y.z 格式）`,
+      `Unknown release type or invalid version: ${type} (expected patch, minor, major, or x.y.z)`,
     );
   }
   return `${major}.${minor}.${patch}`;
@@ -57,18 +58,18 @@ try {
 }
 
 if (nextVersion === currentVersion) {
-  console.warn(`⚠️ 目标版本与当前版本一致 (${currentVersion})，无需更新。`);
+  console.warn(`⚠️ Target version matches current version (${currentVersion}), no update needed.`);
   process.exit(0);
 }
 
-console.log(`🚀 开始版本统一更新: v${currentVersion} -> v${nextVersion}`);
+console.log(`🚀 Starting unified version bump: v${currentVersion} -> v${nextVersion}`);
 
-// 3. 更新 package.json
+// 3. Update package.json
 pkg.version = nextVersion;
 writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
-console.log('  ✓ 已更新 package.json');
+console.log('  ✓ Updated package.json');
 
-// 4. 更新 package-lock.json
+// 4. Update package-lock.json
 try {
   const lockRaw = readFileSync(lockPath, 'utf8');
   const lock = JSON.parse(lockRaw);
@@ -77,40 +78,48 @@ try {
     lock.packages[''].version = nextVersion;
   }
   writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
-  console.log('  ✓ 已更新 package-lock.json');
+  console.log('  ✓ Updated package-lock.json');
 } catch (err) {
-  console.warn('  ! 未找到或更新 package-lock.json 失败:', err.message);
+  console.warn('  ! Warning: failed to update package-lock.json:', err.message);
 }
 
-// 5. 更新 README.md 中的版本徽章
-try {
-  const readme = readFileSync(readmePath, 'utf8');
-  const updatedReadme = readme.replace(
-    /badge\/Userscript-v\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?-blue\.svg/g,
-    `badge/Userscript-v${nextVersion}-blue.svg`,
-  );
-  if (updatedReadme !== readme) {
-    writeFileSync(readmePath, updatedReadme, 'utf8');
-    console.log('  ✓ 已更新 README.md 版本徽章');
+// 5. Update version badges in README.md and README.zh-CN.md
+const readmeFiles = [
+  { path: readmePath, name: 'README.md' },
+  { path: readmeZhPath, name: 'README.zh-CN.md' },
+];
+
+for (const { path, name } of readmeFiles) {
+  try {
+    const readme = readFileSync(path, 'utf8');
+    const updatedReadme = readme.replace(
+      /badge\/Userscript-v\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?-blue\.svg/g,
+      `badge/Userscript-v${nextVersion}-blue.svg`,
+    );
+    if (updatedReadme !== readme) {
+      writeFileSync(path, updatedReadme, 'utf8');
+      console.log(`  ✓ Updated version badge in ${name}`);
+    }
+  } catch (err) {
+    console.warn(`  ! Failed to update ${name}:`, err.message);
   }
-} catch (err) {
-  console.warn('  ! 更新 README.md 失败:', err.message);
 }
 
-// 6. 重新执行编译以生成带新版本头信息的 Userscript 产物
-console.log('🔨 正在重新编译 Userscript (dist/fitgirl-enhanced.user.js)...');
+// 6. Rebuild to produce Userscript artifact with updated version header
+console.log('🔨 Rebuilding Userscript bundle (dist/fitgirl-enhanced.user.js)...');
 try {
   execSync('npm run build', { cwd: rootDir, stdio: 'inherit' });
-  console.log('  ✓ 已编译最新 dist/fitgirl-enhanced.user.js');
+  console.log('  ✓ Successfully rebuilt dist/fitgirl-enhanced.user.js');
 } catch (err) {
-  console.error('❌ 重新构建失败:', err.message);
+  console.error('❌ Rebuild failed:', err.message);
   process.exit(1);
 }
 
-console.log(`\n🎉 版本已成功统一更新为 v${nextVersion}！`);
-console.log('涉及同步更新的文件:');
+console.log(`\n🎉 Version successfully updated to v${nextVersion}!`);
+console.log('Synchronized files:');
 console.log(`  - package.json (version: ${nextVersion})`);
 console.log(`  - package-lock.json (version: ${nextVersion})`);
-console.log(`  - vite.config.ts (自动读取 package.json)`);
+console.log(`  - vite.config.ts (dynamically reads package.json)`);
 console.log(`  - README.md (Userscript-v${nextVersion}-blue.svg)`);
+console.log(`  - README.zh-CN.md (Userscript-v${nextVersion}-blue.svg)`);
 console.log(`  - dist/fitgirl-enhanced.user.js (Userscript header @version ${nextVersion})`);

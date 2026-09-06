@@ -26,23 +26,20 @@
   - Use `GM_getValue` / `GM_setValue` (or `localStorage`) prefixed with a distinct namespace for user preferences.
 
 ## Git & Contribution Rules
-- **禁止自主提交（No Autonomous Commits）**：除非用户在此轮对话中给出了明确的提交指令（例如明确说出“提交代码”、“commit”等），否则严禁自动执行 `git commit` 或 `git push`。代码修改、测试与构建完成后，应当向用户汇报状态并等待用户确认，不得擅自创建提交。
+- **No Autonomous Commits**: Unless the user explicitly gives a commit command in the current dialogue (e.g., explicitly stating "commit code", "commit", etc.), automatically running `git commit` or `git push` is strictly prohibited. After code changes, tests, and builds are completed, report status to the user and wait for user confirmation before creating any commit.
 - Keep commits concise and imperative (e.g., `feat: add magnet quick-copy button`, `fix: update selectors for post links`).
 - Do not commit local user config or browser-specific test tokens.
 
-## Language & Communication Rules
-- **Primary Language**: 用户的母语是中文（Chinese）。所有代码注释、文档（README.md 双语优先或以中文为主）、更新日志以及所有与用户的交互沟通必须以中文进行。
-
 ## Installation & Distribution Best Practices
-- **Direct URL Install**: 脚本编译产物保持在 `dist/fitgirl-enhanced.user.js`，在 GitHub 仓库发布后，用户直接访问 `raw.githubusercontent.com` 或 jsDelivr CDN 链接即可触发油猴（Tampermonkey / Violentmonkey）的一键安装界面。
-- **Auto-Update (`@updateURL` & `@downloadURL`)**: 在 Userscript 元数据头配置可靠的自更新地址与下载地址，确保油猴插件能够在后台静默检测新版本并提示升级。
+- **Direct URL Install**: The compiled Userscript artifact is maintained at `dist/fitgirl-enhanced.user.js`. After publishing to the GitHub repository, users directly accessing the `raw.githubusercontent.com` or jsDelivr CDN link can trigger one-click Userscript installation in Tampermonkey / Violentmonkey.
+- **Auto-Update (`@updateURL` & `@downloadURL`)**: Configure reliable self-update and download URLs in the Userscript metadata header to allow script managers to silently check for new versions and prompt for updates in the background.
 
-## Version Management & Bumping Rules（版本管理规范）
-- **单一事实来源（SSOT）**：`package.json` 中的 `"version"` 为项目版本的唯一标准。`vite.config.ts` 必须动态引用 `package.json` 中的版本号，严禁在配置中硬编码版本字符串。
-- **一键统一升级命令**：项目版本升级统一使用 `npm run bump <patch | minor | major | x.y.z>` 命令执行，严禁手动分头修改多个文件。
-  - `patch`：Bug 修复、补丁升级（如 `1.4.1` -> `1.4.2`）
-  - `minor`：新增功能、特性增强（如 `1.4.1` -> `1.5.0`）
-  - `major`：架构重构、重大破坏性变更（如 `1.5.0` -> `2.0.0`）
-- **自动化联动范围**：`npm run bump` 会全自动同步 `package.json`、`package-lock.json`、`README.md` 顶部徽章，并自动触发 `npm run build` 重新编译生成携带最新 `@version` 头信息的 `dist/fitgirl-enhanced.user.js`。
-- **合规边界**：版本升级命令执行后，必须严格遵循「禁止自主提交」规则，等待用户确认后再行提交。
+## Version Management & Bumping Rules
+- **Single Source of Truth (SSOT)**: `"version"` in `package.json` is the sole standard for project versioning. `vite.config.ts` must dynamically reference the version from `package.json` and must never hardcode version strings.
+- **Unified Version Bumping Command**: Version bumps must be executed via `npm run bump <patch | minor | major | x.y.z>`. Never modify multiple files manually.
+  - `patch`: Bug fixes and patch releases (e.g., `1.4.1` -> `1.4.2`)
+  - `minor`: New features and functionality additions (e.g., `1.4.1` -> `1.5.0`)
+  - `major`: Architectural refactoring and breaking changes (e.g., `1.5.0` -> `2.0.0`)
+- **Automated Synchronization Scope**: `npm run bump` automatically synchronizes `package.json`, `package-lock.json`, and version badges in both `README.md` and `README.zh-CN.md`, and triggers `npm run build` to regenerate the Userscript artifact carrying the latest `@version` header.
+- **Compliance Boundary**: After running the version bump command, strictly follow the "No Autonomous Commits" rule and wait for explicit user confirmation before committing.
 
