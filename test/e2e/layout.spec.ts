@@ -8,6 +8,63 @@ const viewports = [
   { name: 'wide', width: 1920, height: 1080 },
 ];
 
+const seededRatings = {
+  'fitgirl-web-enhanced:v1:rating:sample game: deluxe edition': {
+    data: {
+      appId: 1091500,
+      name: 'Cyberpunk 2077',
+      positivePercent: 89,
+      scoreDesc: 'Very Positive',
+      totalReviews: 658920,
+      totalPositive: 586438,
+      totalNegative: 72482,
+      metascore: 86,
+      steamUrl: 'https://store.steampowered.com/app/1091500/',
+      steamDbUrl: 'https://steamdb.info/app/1091500/',
+      metacriticUrl: 'https://www.metacritic.com/game/cyberpunk-2077/',
+    },
+    timestamp: Date.now(),
+  },
+  'fitgirl-web-enhanced:v1:rating:second game: deluxe edition': {
+    data: {
+      appId: 1245620,
+      name: 'ELDEN RING',
+      positivePercent: 93,
+      scoreDesc: 'Very Positive',
+      totalReviews: 842100,
+      totalPositive: 783153,
+      totalNegative: 58947,
+      metascore: 96,
+      steamUrl: 'https://store.steampowered.com/app/1245620/',
+      steamDbUrl: 'https://steamdb.info/app/1245620/',
+    },
+    timestamp: Date.now(),
+  },
+  'fitgirl-web-enhanced:v1:rating:the alters: deluxe edition': {
+    data: {
+      appId: 1601570,
+      name: 'The Alters',
+      positivePercent: 91,
+      scoreDesc: 'Very Positive',
+      totalReviews: 14850,
+      totalPositive: 13513,
+      totalNegative: 1337,
+      metascore: 85,
+      steamUrl: 'https://store.steampowered.com/app/1601570/',
+      steamDbUrl: 'https://steamdb.info/app/1601570/',
+    },
+    timestamp: Date.now(),
+  },
+};
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript((seed) => {
+    for (const [key, value] of Object.entries(seed)) {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    }
+  }, seededRatings);
+});
+
 for (const viewport of viewports) {
   test(`${viewport.name} 无横向溢出并使用对应列数`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -199,7 +256,7 @@ test('顶部保留桌面悬浮子菜单，Browse 提供完整路由和归档', a
   await subMenuLink.hover();
   await expect(subMenu).toBeVisible();
   await expect(subMenuLink).toBeVisible();
-  await page.getByRole('button', { name: '浏览站点路由和月度归档' }).click();
+  await page.getByRole('button', { name: 'Browse site categories and monthly archives' }).click();
   const browse = page.locator('.fwe-browse-dialog');
   await expect(browse).toBeVisible();
   await expect(browse.getByText('Monthly Archives')).toBeVisible();
@@ -210,7 +267,9 @@ test('顶部保留桌面悬浮子菜单，Browse 提供完整路由和归档', a
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await expect(page.locator('#site-header-menu')).toBeHidden();
-  await expect(page.getByRole('button', { name: '浏览站点路由和月度归档' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Browse site categories and monthly archives' }),
+  ).toBeVisible();
 });
 
 test('Digest、搜索和月度归档保持统一卡片布局', async ({ page }) => {
@@ -293,7 +352,7 @@ test('布局选择跨刷新保持，原站模式仅使用固定恢复入口', as
   await page.goto('./');
   const viewControl = page.locator('.fwe-view-control');
   await viewControl.locator('summary').click();
-  const toggle = page.getByRole('switch', { name: '切换增强布局与原站布局' });
+  const toggle = page.getByRole('switch', { name: 'Toggle enhanced grid layout' });
   await toggle.click();
   await expect(page.locator('html')).toHaveAttribute('data-fwe-mode', 'original');
   await expect(page.locator('.fwe-view-control')).toHaveCSS('position', 'fixed');
@@ -342,11 +401,14 @@ test('媒体截图点击打开磨砂玻璃预览对话框并支持翻页与Esc�
 test('桌面和移动视觉快照', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./');
+  await expect(page.locator('.fwe-rating-badge')).toHaveCount(2);
   await expect(page).toHaveScreenshot('listing-desktop.png', { fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
+  await expect(page.locator('.fwe-rating-badge')).toHaveCount(1);
   await expect(page).toHaveScreenshot('listing-mobile.png', { fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./?page=single');
+  await expect(page.locator('.fwe-fact--rating')).toHaveCount(1);
   await expect(page).toHaveScreenshot('detail-desktop.png', { fullPage: true });
 });

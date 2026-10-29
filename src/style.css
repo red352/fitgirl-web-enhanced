@@ -2343,7 +2343,8 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
 }
 
 .fwe-rating-container--empty {
-  display: none !important;
+  min-height: 1.25rem;
+  pointer-events: none;
 }
 
 @keyframes fwe-rating-shimmer {

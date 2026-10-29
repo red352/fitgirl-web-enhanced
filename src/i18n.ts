@@ -82,6 +82,11 @@ const translations = {
     ratingUnmatchedTitle: 'No Steam rating matched. Hover for details or force refresh.',
     ratingUnmatchedDesc:
       'No matching review data found on Steam. The game may lack sufficient reviews or uses a custom title alias.',
+    ratingUnavailableText: 'Query Failed',
+    ratingUnavailableAria: '{title} rating query failed, click or hover to retry',
+    ratingUnavailableTitle: 'Steam rating query failed. Check your connection and retry.',
+    ratingUnavailableDesc:
+      'Steam did not return review data. This is usually a temporary network or request failure, not a confirmed missing game.',
     ratingRefreshTitle: 'Force refresh rating (clear local cache)',
     ratingRefreshAria: 'Force refresh rating',
     steamStore: 'Steam Store',
@@ -176,6 +181,10 @@ const translations = {
     ratingUnmatchedTitle: '未在 Steam 自动匹配到评分，悬浮可查看详情或强制刷新',
     ratingUnmatchedDesc:
       '未能在 Steam 自动匹配到有效评测数据，可能是游戏在 Steam 暂无足够评价，或标题包含特殊别名。',
+    ratingUnavailableText: '查询失败',
+    ratingUnavailableAria: '{title} 评分查询失败，点击或悬浮重试',
+    ratingUnavailableTitle: 'Steam 评分查询失败，请检查网络后重试',
+    ratingUnavailableDesc: 'Steam 未返回评测数据，通常是临时网络或请求异常，并不代表游戏未收录。',
     ratingRefreshTitle: '强制重新获取评分（清除本地缓存）',
     ratingRefreshAria: '强制重新获取评分',
     steamStore: 'Steam 商店',

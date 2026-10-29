@@ -152,7 +152,7 @@ export function makeRequest(url: string): Promise<string> {
       gmRequest({
         method: 'GET',
         url,
-        timeout: 10000,
+        timeout: 6000,
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
             resolve(res.responseText);
@@ -266,6 +266,18 @@ interface SteamStoreSearchResult {
   items?: SteamStoreSearchItem[];
 }
 
+export type SteamSearchResolution =
+  | { status: 'matched'; appId: number; name: string; metascore?: number }
+  | { status: 'not-found' }
+  | { status: 'unavailable' };
+
+export type GameRatingLookupStatus = 'ready' | 'unmatched' | 'unavailable';
+
+export interface GameRatingLookup {
+  status: GameRatingLookupStatus;
+  data: GameRatingData | null;
+}
+
 interface SteamReviewsResult {
   success: number;
   query_summary?: {
@@ -277,45 +289,180 @@ interface SteamReviewsResult {
   };
 }
 
+const STEAM_REVIEW_SCORE_DESCRIPTIONS: Record<number, string> = {
+  9: 'Overwhelmingly Positive',
+  8: 'Very Positive',
+  7: 'Positive',
+  6: 'Mostly Positive',
+  5: 'Mixed',
+  4: 'Mostly Negative',
+  3: 'Negative',
+  2: 'Very Negative',
+  1: 'Overwhelmingly Negative',
+};
+
+interface SteamStorePageReviewSummary {
+  appid?: number;
+  appname?: string;
+  summary_num_positive_reviews?: number;
+  summary_num_reviews?: number;
+  summary_options?: {
+    summaryDisplayed?: {
+      eReviewScore?: number;
+    };
+  };
+}
+
+function toGameRatingData(
+  targetAppId: number,
+  targetName: string,
+  totalPositive: number,
+  totalReviews: number,
+  scoreDesc: string,
+  metascore?: number,
+): GameRatingData | null {
+  if (
+    !Number.isFinite(targetAppId) ||
+    targetAppId <= 0 ||
+    !Number.isFinite(totalPositive) ||
+    !Number.isFinite(totalReviews) ||
+    totalPositive < 0 ||
+    totalReviews <= 0 ||
+    totalPositive > totalReviews
+  ) {
+    return null;
+  }
+
+  const positivePercent = Math.round((totalPositive / totalReviews) * 100);
+  return {
+    appId: targetAppId,
+    name: targetName,
+    positivePercent,
+    scoreDesc,
+    totalReviews,
+    totalPositive,
+    totalNegative: totalReviews - totalPositive,
+    metascore,
+    steamUrl: `https://store.steampowered.com/app/${targetAppId}/`,
+    steamDbUrl: `https://steamdb.info/app/${targetAppId}/`,
+    metacriticUrl: metascore
+      ? `https://www.metacritic.com/search/${encodeURIComponent(targetName)}/`
+      : undefined,
+  };
+}
+
+function parseReviewSummaryProps(html: string): SteamStorePageReviewSummary | null {
+  const match = html.match(/data-featuretarget="appreviews"[^>]*data-props="([^"]+)"/i);
+  if (!match?.[1]) return null;
+
+  try {
+    const decoded = match[1]
+      .replace(/&quot;/g, '"')
+      .replace(/&#34;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+    return JSON.parse(decoded) as SteamStorePageReviewSummary;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parses the official app page review payload used by Steam's own storefront.
+ */
+export function parseSteamStorePageRating(
+  html: string,
+  appId: number,
+  fallbackName?: string,
+  metascore?: number,
+): GameRatingData | null {
+  const summary = parseReviewSummaryProps(html);
+  if (!summary) return null;
+
+  const totalPositive = summary.summary_num_positive_reviews;
+  const totalReviews = summary.summary_num_reviews;
+  if (typeof totalPositive !== 'number' || typeof totalReviews !== 'number') return null;
+
+  const scoreDescription = summary.summary_options?.summaryDisplayed?.eReviewScore;
+  const scoreDesc =
+    typeof scoreDescription === 'number' ? STEAM_REVIEW_SCORE_DESCRIPTIONS[scoreDescription] : '';
+  if (!scoreDesc) return null;
+
+  return toGameRatingData(
+    appId,
+    summary.appname || fallbackName || `App ${appId}`,
+    totalPositive,
+    totalReviews,
+    scoreDesc,
+    metascore,
+  );
+}
+
 /**
  * Searches Steam store for matching candidates and extracts base rating data.
  */
 export async function resolveRatingByCandidates(
   candidates: string[],
-): Promise<{ appId: number; name: string; metascore?: number } | null> {
-  for (const candidate of candidates) {
-    try {
+): Promise<SteamSearchResolution> {
+  const settled = await Promise.allSettled(
+    candidates.map(async (candidate) => {
       const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(candidate)}&l=english&cc=US`;
       const text = await makeRequest(url);
       const json = JSON.parse(text) as SteamStoreSearchResult;
-      if (json.items && json.items.length > 0) {
-        // Prioritize standalone base game entries over DLC, soundtracks, and expansion packs
-        const sortedItems = [...json.items].sort((a, b) => {
-          const aIsAddon = /\b(content|dlc|pack|soundtrack|expansion|season pass)\b/i.test(a.name);
-          const bIsAddon = /\b(content|dlc|pack|soundtrack|expansion|season pass)\b/i.test(b.name);
-          if (aIsAddon && !bIsAddon) return 1;
-          if (!aIsAddon && bIsAddon) return -1;
-          return 0;
-        });
+      if (!json.items?.length) return null;
 
-        // Verify similarity between candidate query and matched title
-        for (const item of sortedItems.slice(0, 3)) {
-          const sim = calculateTitleSimilarity(candidate, item.name);
-          if (sim >= 0.35) {
-            const metascore = item.metascore ? Number.parseInt(item.metascore, 10) : undefined;
-            return {
-              appId: item.id,
-              name: item.name,
-              metascore: Number.isFinite(metascore) ? metascore : undefined,
-            };
-          }
+      // Prioritize standalone base game entries over DLC, soundtracks, and expansion packs
+      const sortedItems = [...json.items].sort((a, b) => {
+        const aIsAddon = /\b(content|dlc|pack|soundtrack|expansion|season pass)\b/i.test(a.name);
+        const bIsAddon = /\b(content|dlc|pack|soundtrack|expansion|season pass)\b/i.test(b.name);
+        if (aIsAddon && !bIsAddon) return 1;
+        if (!aIsAddon && bIsAddon) return -1;
+        return 0;
+      });
+
+      let best: { item: SteamStoreSearchItem; similarity: number } | null = null;
+      for (const item of sortedItems.slice(0, 3)) {
+        const similarity = calculateTitleSimilarity(candidate, item.name);
+        if (similarity >= 0.35 && (!best || similarity > best.similarity)) {
+          best = { item, similarity };
         }
       }
-    } catch (err) {
-      console.warn('[FitGirl Rating] Search candidate failed:', candidate, err);
-    }
+      return best?.item ?? null;
+    }),
+  );
+
+  const matches = settled
+    .map((result, index) => {
+      if (result.status !== 'fulfilled' || !result.value) return null;
+      const query = candidates[index] ?? '';
+      const originalTitle = candidates.at(-1) ?? query;
+      const querySimilarity = calculateTitleSimilarity(query, result.value.name);
+      const originalSimilarity = calculateTitleSimilarity(originalTitle, result.value.name);
+      const score = querySimilarity * 0.35 + originalSimilarity * 0.65;
+      return {
+        item: result.value,
+        similarity: score,
+      };
+    })
+    .filter((match): match is NonNullable<typeof match> => match !== null)
+    .sort((left, right) => right.similarity - left.similarity);
+
+  const bestMatch = matches[0];
+  if (bestMatch && bestMatch.similarity >= 0.35) {
+    const metascore = bestMatch.item.metascore
+      ? Number.parseInt(bestMatch.item.metascore, 10)
+      : undefined;
+    return {
+      status: 'matched',
+      appId: bestMatch.item.id,
+      name: bestMatch.item.name,
+      metascore: Number.isFinite(metascore) ? metascore : undefined,
+    };
   }
-  return null;
+
+  const completedRequest = settled.some((result) => result.status === 'fulfilled');
+  return completedRequest ? { status: 'not-found' } : { status: 'unavailable' };
 }
 
 /**
@@ -327,11 +474,11 @@ export async function fetchSteamReviews(
   fallbackName?: string,
   initialMetascore?: number,
 ): Promise<GameRatingData | null> {
-  try {
-    let targetAppId = appId;
-    let targetName = fallbackName || `App ${appId}`;
-    let metascore = initialMetascore;
+  let targetAppId = appId;
+  let targetName = fallbackName || `App ${appId}`;
+  let metascore = initialMetascore;
 
+  try {
     // Check appdetails to detect DLC/extras and resolve parent game AppID and Metacritic score
     try {
       const detailsUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
@@ -356,37 +503,36 @@ export async function fetchSteamReviews(
         }
       }
     } catch {
-      // Fallback directly to querying review API with initial AppID
+      // appdetails is optional metadata; the review sources can still succeed.
     }
 
-    const url = `https://store.steampowered.com/appreviews/${targetAppId}?json=1&language=all&purchase_type=all&num_per_page=0`;
-    const text = await makeRequest(url);
-    const json = JSON.parse(text) as SteamReviewsResult;
-    const summary = json.query_summary;
-
-    if (!summary || summary.total_reviews <= 0) {
-      return null;
+    try {
+      const reviewUrl = `https://store.steampowered.com/appreviews/${targetAppId}?json=1&language=all&purchase_type=all&num_per_page=0`;
+      const reviewText = await makeRequest(reviewUrl);
+      const reviewJson = JSON.parse(reviewText) as SteamReviewsResult;
+      const summary = reviewJson.query_summary;
+      if (summary) {
+        const rating = toGameRatingData(
+          targetAppId,
+          targetName,
+          summary.total_positive,
+          summary.total_reviews,
+          summary.review_score_desc,
+          metascore,
+        );
+        if (rating) return rating;
+      }
+    } catch (err) {
+      console.warn(
+        '[FitGirl Rating] Review API unavailable, falling back to store page:',
+        appId,
+        err,
+      );
     }
 
-    const positivePercent = Math.round((summary.total_positive / summary.total_reviews) * 100);
-    // Standardize scoreDesc in English (e.g. 'Very Positive')
-    const rawScoreDesc = summary.review_score_desc;
-
-    return {
-      appId: targetAppId,
-      name: targetName,
-      positivePercent,
-      scoreDesc: rawScoreDesc,
-      totalReviews: summary.total_reviews,
-      totalPositive: summary.total_positive,
-      totalNegative: summary.total_negative,
-      metascore,
-      steamUrl: `https://store.steampowered.com/app/${targetAppId}/`,
-      steamDbUrl: `https://steamdb.info/app/${targetAppId}/`,
-      metacriticUrl: metascore
-        ? `https://www.metacritic.com/search/${encodeURIComponent(targetName)}/`
-        : undefined,
-    };
+    const storeUrl = `https://store.steampowered.com/app/${targetAppId}/`;
+    const storeHtml = await makeRequest(storeUrl);
+    return parseSteamStorePageRating(storeHtml, targetAppId, targetName, metascore);
   } catch (err) {
     console.warn('[FitGirl Rating] Fetch reviews failed for appId:', appId, err);
     return null;
@@ -400,12 +546,12 @@ export async function getGameRating(
   title: string,
   articleRoot?: HTMLElement,
   forceRefresh = false,
-): Promise<GameRatingData | null> {
+): Promise<GameRatingLookup> {
   const cacheKey = title.trim().toLowerCase();
   if (!forceRefresh) {
     const cached = globalRatingCache.get(cacheKey);
     if (cached) {
-      return cached.data;
+      return { status: cached.data ? 'ready' : 'unmatched', data: cached.data };
     }
   } else {
     globalRatingCache.delete(cacheKey);
@@ -414,6 +560,7 @@ export async function getGameRating(
   let appId: number | null = null;
   let gameName = title;
   let metascore: number | undefined;
+  let searchFailed = false;
 
   // Tier 1: Check element DOM for existing Steam store link
   if (articleRoot) {
@@ -423,29 +570,39 @@ export async function getGameRating(
   // Tier 2 & 3: If no link in DOM, search candidate titles
   if (!appId) {
     const candidates = generateTitleCandidates(title);
-    const match = await resolveRatingByCandidates(candidates);
-    if (match) {
-      appId = match.appId;
-      gameName = match.name;
-      metascore = match.metascore;
+    const resolution = await resolveRatingByCandidates(candidates);
+    if (resolution.status === 'matched') {
+      appId = resolution.appId;
+      gameName = resolution.name;
+      metascore = resolution.metascore;
+    } else if (resolution.status === 'unavailable') {
+      searchFailed = true;
     }
   }
 
   if (!appId) {
-    globalRatingCache.set(cacheKey, null);
-    return null;
+    if (!searchFailed) {
+      globalRatingCache.set(cacheKey, null);
+    }
+    return { status: searchFailed ? 'unavailable' : 'unmatched', data: null };
   }
 
   // Tier 5: Fetch review details (resolves DLC to parent game when appropriate)
   const ratingData = await fetchSteamReviews(appId, gameName, metascore);
+  if (!ratingData) {
+    // The AppID was valid but both official review sources failed. This is a
+    // transient state, not a confirmed "not indexed" result, so do not cache it.
+    return { status: 'unavailable', data: null };
+  }
   globalRatingCache.set(cacheKey, ratingData);
-  return ratingData;
+  return { status: 'ready', data: ratingData };
 }
 
 /**
  * Concurrency throttling queue to prevent Steam API rate limiting (HTTP 429).
  */
 export class RequestQueue {
+  private readonly pending = new Map<string, Promise<unknown>>();
   private readonly queue: Array<() => Promise<void>> = [];
   private activeCount = 0;
   private readonly maxConcurrent: number;
@@ -456,8 +613,13 @@ export class RequestQueue {
     this.delayMs = delayMs;
   }
 
-  add<T>(fn: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
+  add<T>(fn: () => Promise<T>, key?: string): Promise<T> {
+    if (key) {
+      const existing = this.pending.get(key);
+      if (existing) return existing as Promise<T>;
+    }
+
+    const promise = new Promise<T>((resolve, reject) => {
       this.queue.push(async () => {
         try {
           const result = await fn();
@@ -468,6 +630,12 @@ export class RequestQueue {
       });
       this.processNext();
     });
+
+    if (key) {
+      this.pending.set(key, promise);
+      void promise.finally(() => this.pending.delete(key)).catch(() => undefined);
+    }
+    return promise;
   }
 
   private processNext(): void {
@@ -483,4 +651,4 @@ export class RequestQueue {
   }
 }
 
-export const globalRatingQueue = new RequestQueue(2, 150);
+export const globalRatingQueue = new RequestQueue(3, 100);

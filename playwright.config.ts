@@ -17,6 +17,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4175/test/e2e/',
     browserName: 'chromium',
     colorScheme: 'light',
+    locale: 'en-US',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },

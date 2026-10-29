@@ -10,6 +10,59 @@ import {
   updatesPageArticle,
 } from '../fixtures';
 
+const ratingSeed = {
+  'fitgirl-web-enhanced:v1:rating:sample game: deluxe edition': {
+    data: {
+      appId: 1091500,
+      name: 'Cyberpunk 2077',
+      positivePercent: 89,
+      scoreDesc: 'Very Positive',
+      totalReviews: 658920,
+      totalPositive: 586438,
+      totalNegative: 72482,
+      metascore: 86,
+      steamUrl: 'https://store.steampowered.com/app/1091500/',
+      steamDbUrl: 'https://steamdb.info/app/1091500/',
+      metacriticUrl: 'https://www.metacritic.com/game/cyberpunk-2077/',
+    },
+    timestamp: Date.now(),
+  },
+  'fitgirl-web-enhanced:v1:rating:second game: deluxe edition': {
+    data: {
+      appId: 1245620,
+      name: 'ELDEN RING',
+      positivePercent: 93,
+      scoreDesc: 'Very Positive',
+      totalReviews: 842100,
+      totalPositive: 783153,
+      totalNegative: 58947,
+      metascore: 96,
+      steamUrl: 'https://store.steampowered.com/app/1245620/',
+      steamDbUrl: 'https://steamdb.info/app/1245620/',
+    },
+    timestamp: Date.now(),
+  },
+  'fitgirl-web-enhanced:v1:rating:the alters: deluxe edition': {
+    data: {
+      appId: 1601570,
+      name: 'The Alters',
+      positivePercent: 91,
+      scoreDesc: 'Very Positive',
+      totalReviews: 14850,
+      totalPositive: 13513,
+      totalNegative: 1337,
+      metascore: 85,
+      steamUrl: 'https://store.steampowered.com/app/1601570/',
+      steamDbUrl: 'https://steamdb.info/app/1601570/',
+    },
+    timestamp: Date.now(),
+  },
+};
+
+for (const [key, value] of Object.entries(ratingSeed)) {
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
 const view = new URLSearchParams(window.location.search).get('page') ?? 'home';
 const pageMarkup: Record<string, { bodyClass: string; content: string }> = {
   single: { bodyClass: 'single single-post', content: gameArticle },

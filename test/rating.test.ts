@@ -3,7 +3,11 @@ import {
   calculateTitleSimilarity,
   cleanTitleBase,
   extractSteamAppIdFromElement,
+  fetchSteamReviews,
   generateTitleCandidates,
+  getGameRating,
+  parseSteamStorePageRating,
+  resolveRatingByCandidates,
   RatingCache,
   RATING_CACHE_PREFIX,
   translateScoreDesc,
@@ -107,6 +111,149 @@ describe('Rating Engine', () => {
     it('returns low similarity for unrelated games', () => {
       const sim = calculateTitleSimilarity('Doom Eternal', 'Animal Crossing');
       expect(sim).toBeLessThan(0.3);
+    });
+  });
+
+  describe('parseSteamStorePageRating store-page fallback', () => {
+    it('parses the official embedded review payload when the reviews API redirects', () => {
+      const html = `
+        <div
+          data-featuretarget="appreviews"
+          data-props="{&quot;appid&quot;:1245620,&quot;appname&quot;:&quot;ELDEN RING&quot;,&quot;summary_num_positive_reviews&quot;:412075,&quot;summary_num_reviews&quot;:437156,&quot;summary_options&quot;:{&quot;summaryDisplayed&quot;:{&quot;eReviewScore&quot;:8}}}"
+        ></div>
+      `;
+
+      expect(parseSteamStorePageRating(html, 1245620, undefined, 94)).toMatchObject({
+        appId: 1245620,
+        name: 'ELDEN RING',
+        positivePercent: 94,
+        scoreDesc: 'Very Positive',
+        totalReviews: 437156,
+        totalPositive: 412075,
+        totalNegative: 25081,
+        metascore: 94,
+      });
+    });
+  });
+
+  describe('fetchSteamReviews resilient review source', () => {
+    it('uses the store page summary when the reviews endpoint returns HTML', async () => {
+      const originalFetch = globalThis.fetch;
+      const storeHtml = `
+        <div
+          data-featuretarget="appreviews"
+          data-props="{&quot;appid&quot;:1245620,&quot;appname&quot;:&quot;ELDEN RING&quot;,&quot;summary_num_positive_reviews&quot;:412075,&quot;summary_num_reviews&quot;:437156,&quot;summary_options&quot;:{&quot;summaryDisplayed&quot;:{&quot;eReviewScore&quot;:8}}}"
+        ></div>
+      `;
+      globalThis.fetch = async (input) => {
+        const url = String(input);
+        if (url.includes('/api/appdetails')) {
+          return new Response(
+            JSON.stringify({
+              1245620: {
+                success: true,
+                data: {
+                  type: 'game',
+                  name: 'ELDEN RING',
+                  metacritic: { score: 94 },
+                },
+              },
+            }),
+            { status: 200 },
+          );
+        }
+        if (url.includes('/appreviews/')) {
+          return new Response('<html>Steam home</html>', {
+            status: 200,
+            headers: { 'content-type': 'text/html' },
+          });
+        }
+        if (url.endsWith('/app/1245620/')) {
+          return new Response(storeHtml, {
+            status: 200,
+            headers: { 'content-type': 'text/html' },
+          });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      };
+
+      try {
+        await expect(fetchSteamReviews(1245620, 'ELDEN RING')).resolves.toMatchObject({
+          appId: 1245620,
+          positivePercent: 94,
+          scoreDesc: 'Very Positive',
+          totalReviews: 437156,
+          metascore: 94,
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+  });
+
+  describe('Steam search failure classification', () => {
+    it('rejects an unrelated search hit instead of caching it as a Steam match', async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({
+            total: 1,
+            items: [{ type: 'app', id: 999, name: 'Completely Different Game' }],
+          }),
+          { status: 200 },
+        );
+
+      try {
+        await expect(
+          resolveRatingByCandidates(['over the hill', 'Supporter Pack Bundle', 'unknown']),
+        ).resolves.toEqual({ status: 'not-found' });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it('distinguishes a completed empty search from a network failure', async () => {
+      const originalFetch = globalThis.fetch;
+
+      globalThis.fetch = async () =>
+        new Response(JSON.stringify({ total: 0, items: [] }), { status: 200 });
+      try {
+        await expect(resolveRatingByCandidates(['Unknown Game'])).resolves.toEqual({
+          status: 'not-found',
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+
+      globalThis.fetch = async () => {
+        throw new TypeError('Failed to fetch');
+      };
+      try {
+        await expect(resolveRatingByCandidates(['Unknown Game'])).resolves.toEqual({
+          status: 'unavailable',
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it('does not persist a network failure as a negative rating cache entry', async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async () => {
+        throw new TypeError('Failed to fetch');
+      };
+
+      try {
+        await expect(getGameRating('Network Failure Game', undefined, true)).resolves.toEqual({
+          status: 'unavailable',
+          data: null,
+        });
+        expect(
+          window.localStorage.getItem(`${RATING_CACHE_PREFIX}network failure game`),
+        ).toBeNull();
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     });
   });
 
@@ -300,6 +447,29 @@ describe('Rating Engine', () => {
       expect(retryBtn).not.toBeNull();
       retryBtn?.click();
       expect(refreshCalled).toBe(true);
+      popover.destroy();
+    });
+
+    it('renders a distinct transient failure view instead of claiming the game is unindexed', () => {
+      setActiveLanguage('en');
+      const popover = new RatingPopover();
+      const anchor = document.createElement('div');
+      document.body.append(anchor);
+
+      popover.showUnavailable(anchor, 'Elden Ring', () => undefined);
+
+      const popoverEl = document.querySelector('.fwe-rating-popover') as HTMLElement;
+      expect(popoverEl.querySelector('.fwe-rating-popover__appid')?.textContent).toBe(
+        'Query Failed',
+      );
+      expect(popoverEl.querySelector('.fwe-rating-popover__unmatched-text')?.textContent).toContain(
+        'temporary network or request failure',
+      );
+
+      setActiveLanguage('zh-CN');
+      popover.updateLanguage();
+      expect(popoverEl.querySelector('.fwe-rating-popover__appid')?.textContent).toBe('查询失败');
+
       popover.destroy();
     });
   });

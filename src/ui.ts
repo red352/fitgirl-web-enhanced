@@ -11,12 +11,7 @@ import {
   parsePopularItems,
   parseUpcomingItems,
 } from './dom';
-import {
-  detectBrowserLanguage,
-  getActiveLanguage,
-  setActiveLanguage,
-  t,
-} from './i18n';
+import { detectBrowserLanguage, getActiveLanguage, setActiveLanguage, t } from './i18n';
 import {
   getFastStoredInfiniteScroll,
   getFastStoredLanguage,
@@ -1080,6 +1075,7 @@ export class RatingPopover {
   public currentAnchor: HTMLElement | null = null;
   private onRefreshCallback: (() => void) | null = null;
   private currentData: GameRatingData | null = null;
+  private unmatchedKind: 'unmatched' | 'unavailable' = 'unmatched';
 
   constructor() {
     this.element = element('div', 'fwe-rating-popover');
@@ -1194,9 +1190,7 @@ export class RatingPopover {
   private triggerRefresh(): void {
     this.refreshBtn.disabled = true;
     this.unmatchedRetryBtn.disabled = true;
-    this.refreshBtn
-      .querySelector('.fwe-rating-popover__refresh-icon')
-      ?.classList.add('fwe-spin');
+    this.refreshBtn.querySelector('.fwe-rating-popover__refresh-icon')?.classList.add('fwe-spin');
     if (this.onRefreshCallback) {
       this.onRefreshCallback();
     }
@@ -1289,12 +1283,26 @@ export class RatingPopover {
   }
 
   showUnmatched(anchor: HTMLElement, title: string, onRefresh?: () => void): void {
+    this.showFallback(anchor, title, 'unmatched', onRefresh);
+  }
+
+  showUnavailable(anchor: HTMLElement, title: string, onRefresh?: () => void): void {
+    this.showFallback(anchor, title, 'unavailable', onRefresh);
+  }
+
+  private showFallback(
+    anchor: HTMLElement,
+    title: string,
+    kind: 'unmatched' | 'unavailable',
+    onRefresh?: () => void,
+  ): void {
     if (this.hideTimeout !== null) {
       window.clearTimeout(this.hideTimeout);
       this.hideTimeout = null;
     }
     this.currentAnchor = anchor;
     this.currentData = null;
+    this.unmatchedKind = kind;
     this.onRefreshCallback = onRefresh ?? null;
     this.refreshBtn.disabled = false;
     this.unmatchedRetryBtn.disabled = false;
@@ -1311,7 +1319,9 @@ export class RatingPopover {
 
     const cleanTitle = cleanTitleBase(title);
     this.title.textContent = cleanTitle || title;
-    this.appIdBadge.textContent = t('ratingUnmatchedText');
+    this.appIdBadge.textContent = this.getFallbackBadgeText();
+    this.unmatchedTextEl.textContent =
+      kind === 'unavailable' ? t('ratingUnavailableDesc') : t('ratingUnmatchedDesc');
 
     this.steamLink.textContent = t('steamSearch');
     this.steamLink.href = `https://store.steampowered.com/search/?term=${encodeURIComponent(cleanTitle || title)}`;
@@ -1327,10 +1337,14 @@ export class RatingPopover {
   updateLanguage(): void {
     this.refreshBtn.setAttribute('title', t('ratingRefreshTitle'));
     this.refreshBtn.setAttribute('aria-label', t('ratingRefreshAria'));
-    this.unmatchedTextEl.textContent = t('ratingUnmatchedDesc');
+    this.unmatchedTextEl.textContent =
+      this.unmatchedKind === 'unavailable' ? t('ratingUnavailableDesc') : t('ratingUnmatchedDesc');
     this.unmatchedRetryBtn.textContent = t('queryAgain');
     if (this.currentData) {
-      this.scoreDesc.textContent = translateScoreDesc(this.currentData.scoreDesc, getActiveLanguage());
+      this.scoreDesc.textContent = translateScoreDesc(
+        this.currentData.scoreDesc,
+        getActiveLanguage(),
+      );
       this.reviewsCount.textContent = t('reviewsSummary', {
         total: this.currentData.totalReviews.toLocaleString(),
         positive: this.currentData.totalPositive.toLocaleString(),
@@ -1339,10 +1353,16 @@ export class RatingPopover {
       this.steamLink.textContent = t('steamStore');
       this.steamDbLink.textContent = t('steamDb');
     } else {
-      this.appIdBadge.textContent = t('ratingUnmatchedText');
+      this.appIdBadge.textContent = this.getFallbackBadgeText();
       this.steamLink.textContent = t('steamSearch');
       this.steamDbLink.textContent = t('steamDbSearch');
     }
+  }
+
+  private getFallbackBadgeText(): string {
+    return this.unmatchedKind === 'unavailable'
+      ? t('ratingUnavailableText')
+      : t('ratingUnmatchedText');
   }
 
   hide(delay = 180): void {
@@ -1389,11 +1409,18 @@ function renderLoadingBadge(container: HTMLElement): void {
   container.append(badge);
 }
 
+function renderEmptyBadge(container: HTMLElement): void {
+  container.innerHTML = '';
+  container.classList.add('fwe-rating-container--empty');
+  container.style.removeProperty('display');
+}
+
 function renderUnmatchedBadge(
   container: HTMLElement,
   article: ParsedArticle,
   popover: RatingPopover,
   triggerRefresh: () => void,
+  kind: 'unmatched' | 'unavailable' = 'unmatched',
 ): void {
   container.innerHTML = '';
   container.classList.remove('fwe-rating-container--empty');
@@ -1401,29 +1428,52 @@ function renderUnmatchedBadge(
   const badge = element('div', 'fwe-rating-badge fwe-rating-badge--unmatched');
   badge.setAttribute('role', 'button');
   badge.setAttribute('tabindex', '0');
-  badge.setAttribute('aria-label', t('ratingUnmatchedAria', { title: article.title }));
-  badge.title = t('ratingUnmatchedTitle');
+  badge.setAttribute(
+    'aria-label',
+    t(kind === 'unavailable' ? 'ratingUnavailableAria' : 'ratingUnmatchedAria', {
+      title: article.title,
+    }),
+  );
+  badge.title = t(kind === 'unavailable' ? 'ratingUnavailableTitle' : 'ratingUnmatchedTitle');
 
   const pill = element('span', 'fwe-rating-pill fwe-rating-pill--unmatched');
   pill.append(createIcon('help', 'fwe-rating-icon fwe-rating-icon--unmatched'));
-  pill.append(element('span', 'fwe-rating-unmatched-text', t('ratingUnmatchedText')));
+  pill.append(
+    element(
+      'span',
+      'fwe-rating-unmatched-text',
+      t(kind === 'unavailable' ? 'ratingUnavailableText' : 'ratingUnmatchedText'),
+    ),
+  );
   badge.append(pill);
 
   badge.addEventListener('mouseenter', () => {
-    popover.showUnmatched(badge, article.title, triggerRefresh);
+    if (kind === 'unavailable') {
+      popover.showUnavailable(badge, article.title, triggerRefresh);
+    } else {
+      popover.showUnmatched(badge, article.title, triggerRefresh);
+    }
   });
   badge.addEventListener('mouseleave', () => {
     popover.hide();
   });
   badge.addEventListener('click', (e) => {
     e.stopPropagation();
-    popover.showUnmatched(badge, article.title, triggerRefresh);
+    if (kind === 'unavailable') {
+      popover.showUnavailable(badge, article.title, triggerRefresh);
+    } else {
+      popover.showUnmatched(badge, article.title, triggerRefresh);
+    }
   });
   badge.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       e.stopPropagation();
-      popover.showUnmatched(badge, article.title, triggerRefresh);
+      if (kind === 'unavailable') {
+        popover.showUnavailable(badge, article.title, triggerRefresh);
+      } else {
+        popover.showUnmatched(badge, article.title, triggerRefresh);
+      }
     }
   });
 
@@ -1566,14 +1616,23 @@ export async function loadRatingForBadge(
   };
 
   try {
-    const data = await globalRatingQueue.add(() =>
-      getGameRating(article.title, article.root, forceRefresh),
+    const result = await globalRatingQueue.add(
+      () => getGameRating(article.title, article.root, forceRefresh),
+      forceRefresh ? undefined : article.title.trim().toLowerCase(),
     );
 
-    if (!data) {
-      renderUnmatchedBadge(container, article, popover, triggerRefresh);
+    if (result.status !== 'ready' || !result.data) {
+      renderUnmatchedBadge(
+        container,
+        article,
+        popover,
+        triggerRefresh,
+        result.status === 'unavailable' ? 'unavailable' : 'unmatched',
+      );
       return;
     }
+
+    const data = result.data;
 
     renderSuccessBadge(container, data, popover, triggerRefresh);
 
@@ -1581,7 +1640,7 @@ export async function loadRatingForBadge(
       updateDetailFactsWithRating(article, data, triggerRefresh);
     }
   } catch {
-    renderUnmatchedBadge(container, article, popover, triggerRefresh);
+    renderUnmatchedBadge(container, article, popover, triggerRefresh, 'unavailable');
   }
 }
 
@@ -1596,6 +1655,7 @@ function createRatingBadge(
   container.dataset.title = article.title;
 
   if (ratingObserver) {
+    renderEmptyBadge(container);
     ratingObserver.observe(container);
   } else {
     void loadRatingForBadge(container, article, popover);
@@ -2058,7 +2118,11 @@ export class FitGirlEnhancedApp {
     layoutRow.append(this.switchButton);
 
     const mediaRow = element('div', 'fwe-view-control__row');
-    this.mediaLabel = element('span', 'fwe-view-control__label', t('expandScreenshots', this.language));
+    this.mediaLabel = element(
+      'span',
+      'fwe-view-control__label',
+      t('expandScreenshots', this.language),
+    );
     mediaRow.append(this.mediaLabel);
     this.mediaSwitchButton = element('button', 'fwe-switch');
     this.mediaSwitchButton.type = 'button';
@@ -2068,7 +2132,11 @@ export class FitGirlEnhancedApp {
     mediaRow.append(this.mediaSwitchButton);
 
     const infiniteRow = element('div', 'fwe-view-control__row');
-    this.infiniteLabel = element('span', 'fwe-view-control__label', t('infiniteScroll', this.language));
+    this.infiniteLabel = element(
+      'span',
+      'fwe-view-control__label',
+      t('infiniteScroll', this.language),
+    );
     infiniteRow.append(this.infiniteLabel);
     this.infiniteSwitchButton = element('button', 'fwe-switch');
     this.infiniteSwitchButton.type = 'button';

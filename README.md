@@ -82,7 +82,7 @@ The original FitGirl Repacks layout relies on a traditional linear blog feed. On
 - **Dynamic Micro-Capsule & Graceful Fallbacks**:
   - **Loading State**: Displays a spinning micro-capsule (`Querying...` / `.fwe-spin`) indicating search progress;
   - **Rating Badge**: Once ready, renders clear review percentages, ratings (e.g., `92% Very Positive (45.6k)`), and Metascore;
-  - **Unmatched State**: If a title is not on Steam or not yet matched, displays an elegant grayscale `Unmatched` capsule without leaving abrupt empty space.
+  - **Unmatched / Query Failure States**: A confirmed missing Steam match shows `Unmatched`; a temporary network or review-request failure shows `Query Failed` instead, with manual retry available and no negative cache pollution.
 - **Rich Review Popover**:
   - Hover or click the rating badge to reveal a comprehensive popover displaying review percentage gradient bars, positive/negative breakdowns, and release year;
   - Quick links to Steam Store and SteamDB charts/price history;
@@ -139,37 +139,37 @@ The original FitGirl Repacks layout relies on a traditional linear blog feed. On
 
 Strict row-aligned responsive card grid adapting to desktop multi-column high-density and mobile single-column stream, featuring Steam rating badges, temporal glow, and relative timestamps:
 
-|             Desktop Listing (Equal-Height Grid & Ratings)             |               Mobile Listing (Adaptive Single-Column)               |
-| :-------------------------------------------------------------------: | :-----------------------------------------------------------------: |
-| ![Desktop Listing View](docs/assets/listing-desktop.png)              | ![Mobile Listing View](docs/assets/listing-mobile.png)              |
+|      Desktop Listing (Equal-Height Grid & Ratings)       |        Mobile Listing (Adaptive Single-Column)         |
+| :------------------------------------------------------: | :----------------------------------------------------: |
+| ![Desktop Listing View](docs/assets/listing-desktop.png) | ![Mobile Listing View](docs/assets/listing-mobile.png) |
 
 ### 2. Steam Game Ratings & Rich Review Popover
 
 Sanitizes and matches titles, showing Steam positive percentage and Metascore. Hover or click to open the detailed popover with review bars, breakdown counts, Steam / SteamDB links, and a refresh button:
 
-|                    Steam Review Details Popover & Card                     |
-| :------------------------------------------------------------------------: |
-| ![Steam Rating & Review Popover](docs/assets/rating-popover.png)           |
+|               Steam Review Details Popover & Card                |
+| :--------------------------------------------------------------: |
+| ![Steam Rating & Review Popover](docs/assets/rating-popover.png) |
 
 ### 3. Game Detail & Pink Paw Award
 
 Single post parameters bar aggregates live Steam ratings; download mirrors fold cleanly. Smart container piercing displays the exclusive Pink Paw badge with full feature and gallery rendering:
 
-|             Standard Game Detail Page (Folded Mirrors & Rating)             |              Pink Paw Award Game (Container Piercing & Badge)               |
-| :-------------------------------------------------------------------------: | :-------------------------------------------------------------------------: |
-| ![Desktop Detail View](docs/assets/detail-desktop.png)                      | ![Pink Paw Award Detail View](docs/assets/pink-paw-desktop.png)            |
+|  Standard Game Detail Page (Folded Mirrors & Rating)   |        Pink Paw Award Game (Container Piercing & Badge)         |
+| :----------------------------------------------------: | :-------------------------------------------------------------: |
+| ![Desktop Detail View](docs/assets/detail-desktop.png) | ![Pink Paw Award Detail View](docs/assets/pink-paw-desktop.png) |
 
 ### 4. Modals, Lightbox & Gestures
 
 Card quick modals for download mirrors, immersive full-screen lightbox (smooth zoom, drag-panning, and original resolution toggle), and adaptive mobile bottom sheets:
 
-|               Card Quick Modal (Mirrors & Features)               |              Desktop Lightbox Gallery (Immersive Viewer)              |
-| :---------------------------------------------------------------: | :-------------------------------------------------------------------: |
-| ![Card Quick Modal](docs/assets/modal-desktop.png)                | ![Desktop Interactive Lightbox](docs/assets/lightbox-desktop.png)     |
+|       Card Quick Modal (Mirrors & Features)        |            Desktop Lightbox Gallery (Immersive Viewer)            |
+| :------------------------------------------------: | :---------------------------------------------------------------: |
+| ![Card Quick Modal](docs/assets/modal-desktop.png) | ![Desktop Interactive Lightbox](docs/assets/lightbox-desktop.png) |
 
-|                       Mobile Popular Repacks Drawer (Adaptive Bottom Sheet)                       |
-| :-----------------------------------------------------------------------------------------------: |
-| <img src="docs/assets/popular-mobile.png" alt="Mobile Popular Drawer" width="360" />             |
+|                Mobile Popular Repacks Drawer (Adaptive Bottom Sheet)                 |
+| :----------------------------------------------------------------------------------: |
+| <img src="docs/assets/popular-mobile.png" alt="Mobile Popular Drawer" width="360" /> |
 
 ---
 
@@ -199,14 +199,14 @@ The script includes `@updateURL` and `@downloadURL` metadata headers. When a new
 
 ### Lightbox Shortcuts
 
-| Shortcut                                                      | Action                                     |
-| :------------------------------------------------------------ | :----------------------------------------- |
-| <kbd>←</kbd>                                                  | Previous screenshot / media                |
-| <kbd>→</kbd>                                                  | Next screenshot / media                    |
-| <kbd>+</kbd> / <kbd>=</kbd> or <kbd>Ctrl</kbd> + <kbd>+</kbd> | Zoom in                                    |
-| <kbd>-</kbd> or <kbd>Ctrl</kbd> + <kbd>-</kbd>                | Zoom out                                   |
-| <kbd>0</kbd> or <kbd>Ctrl</kbd> + <kbd>0</kbd>                | Reset zoom and pan to 1.0x                 |
-| <kbd>Esc</kbd>                                                | Close lightbox                             |
+| Shortcut                                                      | Action                      |
+| :------------------------------------------------------------ | :-------------------------- |
+| <kbd>←</kbd>                                                  | Previous screenshot / media |
+| <kbd>→</kbd>                                                  | Next screenshot / media     |
+| <kbd>+</kbd> / <kbd>=</kbd> or <kbd>Ctrl</kbd> + <kbd>+</kbd> | Zoom in                     |
+| <kbd>-</kbd> or <kbd>Ctrl</kbd> + <kbd>-</kbd>                | Zoom out                    |
+| <kbd>0</kbd> or <kbd>Ctrl</kbd> + <kbd>0</kbd>                | Reset zoom and pan to 1.0x  |
+| <kbd>Esc</kbd>                                                | Close lightbox              |
 
 ### Mouse & Gesture Interactions
 
@@ -267,7 +267,7 @@ src/
 | **Script Managers** | Tampermonkey, Violentmonkey, Greasemonkey, and standard Userscript managers     |
 | **Browsers**        | Latest stable Chromium (Chrome, Edge, Brave, Vivaldi), Firefox, and derivatives |
 | **Viewports**       | 390px mobile single-column up to 4K+ ultrawide 4-column adaptive layout         |
-| **Graceful Degrad** | Automatically falls back to native layout if unexpected DOM anomalies occur      |
+| **Graceful Degrad** | Automatically falls back to native layout if unexpected DOM anomalies occur     |
 
 ---
 
@@ -339,6 +339,8 @@ npm run check
   2. The post title uses non-standard aliases or special subtitles that missed matching candidates;
   3. Network timeout or throttling when reaching Steam Store public endpoints.
 - **Solution**: Hover over the "Unmatched" badge and click **Steam Search** or **SteamDB Search** in the popover to search manually, or click **Query Again 🔄** to retry.
+
+If the badge says **Query Failed**, Steam did not respond with review data. This is usually temporary and is not cached as a confirmed miss; check your connection and click **Query Again 🔄**.
 
 ### Q5: What if ratings are outdated or need refreshing?
 
