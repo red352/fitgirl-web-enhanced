@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import {
   calculateTitleSimilarity,
   cleanTitleBase,
@@ -7,6 +7,7 @@ import {
   generateTitleCandidates,
   getGameRating,
   parseSteamStorePageRating,
+  globalRatingCache,
   resolveRatingByCandidates,
   RatingCache,
   RATING_CACHE_PREFIX,
@@ -276,9 +277,22 @@ describe('Rating Engine', () => {
   describe('RatingCache local storage cache', () => {
     let cache: RatingCache;
 
+    let sampleRating: GameRatingData;
+
     beforeEach(() => {
       window.localStorage.clear();
       cache = new RatingCache();
+      sampleRating = {
+        appId: 1245620,
+        name: 'ELDEN RING',
+        positivePercent: 93,
+        scoreDesc: '特别好评',
+        totalReviews: 1150000,
+        totalPositive: 1070000,
+        totalNegative: 80000,
+        steamUrl: 'https://store.steampowered.com/app/1245620/',
+        steamDbUrl: 'https://steamdb.info/app/1245620/',
+      };
     });
 
     it('stores, retrieves, and persists rating data correctly', () => {
@@ -351,6 +365,72 @@ describe('Rating Engine', () => {
       cache.delete('elden ring');
       expect(cache.get('elden ring')).toBeNull();
       expect(window.localStorage.getItem(`${RATING_CACHE_PREFIX}elden ring`)).toBeNull();
+    });
+
+    it('clears every persisted rating entry and invalidates in-flight writes', async () => {
+      const first = new RatingCache();
+      first.set('elden ring', sampleRating);
+      first.set('unmatched game', null);
+
+      const removed = first.clear();
+      expect(removed).toBeGreaterThanOrEqual(2);
+      expect(first.get('elden ring')).toBeNull();
+      expect(window.localStorage.getItem(`${RATING_CACHE_PREFIX}elden ring`)).toBeNull();
+      expect(window.localStorage.getItem(`${RATING_CACHE_PREFIX}unmatched game`)).toBeNull();
+
+      const originalFetch = globalThis.fetch;
+      let releaseRatingResponse!: (value: Response) => void;
+      const ratingResponse = new Promise<Response>((resolve) => {
+        releaseRatingResponse = resolve;
+      });
+      let ratingRequested = false;
+      const originalGmRequest = (globalThis as Record<string, unknown>).GM_xmlhttpRequest;
+      (globalThis as Record<string, unknown>).GM_xmlhttpRequest = undefined;
+      globalThis.fetch = async (input) => {
+        const url = String(input);
+        if (url.includes('/api/storesearch')) {
+          return Response.json({
+            total: 1,
+            items: [{ type: 'app', id: 1245620, name: 'ELDEN RING' }],
+          });
+        }
+        if (url.includes('/appreviews/')) {
+          ratingRequested = true;
+          return ratingResponse;
+        }
+        return Response.json({
+          1245620: {
+            success: true,
+            data: { type: 'game', name: 'ELDEN RING' },
+          },
+        });
+      };
+
+      first.clear();
+      try {
+        const inFlight = getGameRating('elden ring', undefined, true);
+        await vi.waitFor(() => {
+          expect(ratingRequested).toBe(true);
+        });
+        globalRatingCache.clear();
+        releaseRatingResponse(
+          Response.json({
+            success: 1,
+            query_summary: {
+              review_score: 8,
+              review_score_desc: 'Very Positive',
+              total_positive: 1070,
+              total_negative: 80,
+              total_reviews: 1150,
+            },
+          }),
+        );
+        await expect(inFlight).resolves.toMatchObject({ status: 'ready' });
+        expect(window.localStorage.getItem(`${RATING_CACHE_PREFIX}elden ring`)).toBeNull();
+      } finally {
+        globalThis.fetch = originalFetch;
+        (globalThis as Record<string, unknown>).GM_xmlhttpRequest = originalGmRequest;
+      }
     });
   });
 

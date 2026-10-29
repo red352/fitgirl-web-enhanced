@@ -177,6 +177,8 @@ export function makeRequest(url: string): Promise<string> {
  */
 export class RatingCache {
   private readonly memory = new Map<string, CacheEntry>();
+  private generation = 0;
+  private readonly requestGenerations = new Map<string, number>();
 
   get(key: string): CacheEntry | null {
     const mem = this.memory.get(key);
@@ -205,8 +207,18 @@ export class RatingCache {
     return null;
   }
 
+  currentGeneration(): number {
+    return this.generation;
+  }
+
+  trackRequest(key: string): void {
+    this.requestGenerations.set(key, this.generation);
+  }
+
   set(key: string, data: GameRatingData | null): void {
     const entry: CacheEntry = { data, timestamp: Date.now() };
+    if (this.requestGenerations.has(key) && this.requestGenerations.get(key) !== this.generation)
+      return;
     this.memory.set(key, entry);
     try {
       const storageKey = `${RATING_CACHE_PREFIX}${key}`;
@@ -224,6 +236,25 @@ export class RatingCache {
     } catch {
       // Ignore removal errors
     }
+  }
+
+  clear(): number {
+    let removed = this.memory.size;
+    this.memory.clear();
+    this.generation += 1;
+    this.requestGenerations.clear();
+    try {
+      const keys: string[] = [];
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        if (key?.startsWith(RATING_CACHE_PREFIX)) keys.push(key);
+      }
+      keys.forEach((key) => window.localStorage.removeItem(key));
+      removed += keys.length;
+    } catch {
+      // Ignore storage removal errors
+    }
+    return removed;
   }
 }
 
@@ -548,6 +579,8 @@ export async function getGameRating(
   forceRefresh = false,
 ): Promise<GameRatingLookup> {
   const cacheKey = title.trim().toLowerCase();
+  const cacheGeneration = globalRatingCache.currentGeneration();
+  globalRatingCache.trackRequest(cacheKey);
   if (!forceRefresh) {
     const cached = globalRatingCache.get(cacheKey);
     if (cached) {
@@ -582,7 +615,9 @@ export async function getGameRating(
 
   if (!appId) {
     if (!searchFailed) {
-      globalRatingCache.set(cacheKey, null);
+      if (cacheGeneration === globalRatingCache.currentGeneration()) {
+        globalRatingCache.set(cacheKey, null);
+      }
     }
     return { status: searchFailed ? 'unavailable' : 'unmatched', data: null };
   }
@@ -594,7 +629,9 @@ export async function getGameRating(
     // transient state, not a confirmed "not indexed" result, so do not cache it.
     return { status: 'unavailable', data: null };
   }
-  globalRatingCache.set(cacheKey, ratingData);
+  if (cacheGeneration === globalRatingCache.currentGeneration()) {
+    globalRatingCache.set(cacheKey, ratingData);
+  }
   return { status: 'ready', data: ratingData };
 }
 

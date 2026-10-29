@@ -29,7 +29,13 @@ import {
   writeStoredMediaExpand,
   writeStoredShowRatings,
 } from './preferences';
-import { cleanTitleBase, getGameRating, globalRatingQueue, translateScoreDesc } from './rating';
+import {
+  cleanTitleBase,
+  getGameRating,
+  globalRatingCache,
+  globalRatingQueue,
+  translateScoreDesc,
+} from './rating';
 import type {
   ArchiveGroup,
   ArticleKind,
@@ -1775,10 +1781,21 @@ function transformUpcoming(article: ParsedArticle, transaction: DomTransaction):
   const items = parseUpcomingItems(article.entry);
   const details = element('details', 'fwe-upcoming__details');
   const summary = element('summary', 'fwe-upcoming__summary');
-  summary.append(
-    element('span', 'fwe-upcoming__eyebrow', 'Upcoming Repacks'),
-    createIcon('chevron'),
-  );
+  const eyebrow = element('span', 'fwe-upcoming__eyebrow', 'Upcoming Repacks');
+  summary.append(eyebrow, createIcon('chevron'));
+
+  if (article.titleLink?.href) {
+    const detailsLink = element('a', 'fwe-upcoming__details-link');
+    detailsLink.href = article.titleLink.href;
+    detailsLink.dataset.fweUpcomingTitle = article.title || 'Upcoming Repacks';
+    detailsLink.textContent = t('upcomingDetails');
+    detailsLink.setAttribute(
+      'aria-label',
+      t('upcomingDetailsAria', { title: article.title || 'Upcoming Repacks' }),
+    );
+    detailsLink.addEventListener('click', (event) => event.stopPropagation());
+    summary.append(detailsLink);
+  }
   const body = element('div', 'fwe-upcoming__body');
   items.forEach((item, index) => {
     if (index > 0) body.append(element('span', 'fwe-upcoming__separator', '→'));
@@ -2042,6 +2059,9 @@ export class FitGirlEnhancedApp {
   private readonly infiniteSwitchButton: HTMLButtonElement;
   private readonly ratingLabel: HTMLElement;
   private readonly ratingSwitchButton: HTMLButtonElement;
+  private readonly clearRatingCacheButton: HTMLButtonElement;
+  private readonly clearRatingCacheLabel: HTMLElement;
+  private readonly clearRatingCacheStatus: HTMLElement;
   private readonly languageLabel: HTMLElement;
   private readonly enButton: HTMLButtonElement;
   private readonly zhButton: HTMLButtonElement;
@@ -2051,6 +2071,8 @@ export class FitGirlEnhancedApp {
   private readonly browseButtonSpan: HTMLElement;
   private readonly popularDialog: HTMLDialogElement;
   private readonly browseDialog: HTMLDialogElement;
+  private readonly backToTopButton: HTMLButtonElement;
+  private readonly backToTopButtonSpan: HTMLElement;
   private readonly searchForm: HTMLFormElement;
   private readonly searchInput: HTMLInputElement;
   private readonly searchSubmit: HTMLButtonElement;
@@ -2061,6 +2083,8 @@ export class FitGirlEnhancedApp {
   private lastDialogTrigger: HTMLElement | null = null;
   private activeColCount = 2;
   private resizeListenerAttached = false;
+  private backToTopVisibilityListenerAttached = false;
+  private clearRatingCacheStatusTimer: number | null = null;
 
   constructor() {
     this.mode = getFastStoredLayoutMode();
@@ -2155,6 +2179,30 @@ export class FitGirlEnhancedApp {
     this.ratingSwitchButton.append(element('span', 'fwe-switch__thumb'));
     ratingRow.append(this.ratingSwitchButton);
 
+    const clearRatingCacheRow = element(
+      'div',
+      'fwe-view-control__row fwe-view-control__row--action',
+    );
+    this.clearRatingCacheLabel = element(
+      'span',
+      'fwe-view-control__label',
+      t('clearRatingCache', this.language),
+    );
+    this.clearRatingCacheButton = element('button', 'fwe-cache-clear-button');
+    this.clearRatingCacheButton.type = 'button';
+    this.clearRatingCacheButton.setAttribute(
+      'aria-label',
+      t('clearRatingCacheAria', this.language),
+    );
+    this.clearRatingCacheButton.append(
+      createIcon('trash'),
+      element('span', '', t('clearRatingCache', this.language)),
+    );
+    clearRatingCacheRow.append(this.clearRatingCacheLabel, this.clearRatingCacheButton);
+    this.clearRatingCacheStatus = element('span', 'fwe-view-control__status');
+    this.clearRatingCacheStatus.setAttribute('role', 'status');
+    this.clearRatingCacheStatus.setAttribute('aria-live', 'polite');
+
     const langRow = element('div', 'fwe-view-control__row');
     this.languageLabel = element('span', 'fwe-view-control__label', t('language', this.language));
     langRow.append(this.languageLabel);
@@ -2182,9 +2230,26 @@ export class FitGirlEnhancedApp {
     segmented.append(this.enButton, this.zhButton);
     langRow.append(segmented);
 
-    panel.append(layoutRow, mediaRow, infiniteRow, ratingRow, langRow);
+    panel.append(
+      layoutRow,
+      mediaRow,
+      infiniteRow,
+      ratingRow,
+      clearRatingCacheRow,
+      this.clearRatingCacheStatus,
+      langRow,
+    );
     this.viewControl.append(viewSummary, panel);
     this.mountControls();
+
+    this.backToTopButton = element('button', 'fwe-back-to-top');
+    this.backToTopButton.type = 'button';
+    this.backToTopButton.setAttribute('aria-label', t('backToTopAria', this.language));
+    this.backToTopButton.tabIndex = -1;
+    this.backToTopButtonSpan = element('span', '', t('backToTop', this.language));
+    this.backToTopButton.append(createIcon('arrowUp'), this.backToTopButtonSpan);
+    document.body.append(this.backToTopButton);
+
     this.applyMode(this.mode);
     this.applyMediaExpand(this.mediaExpanded);
     this.applyInfiniteScroll(this.infiniteScroll);
@@ -2206,6 +2271,8 @@ export class FitGirlEnhancedApp {
       'click',
       () => void this.setShowRatings(!this.showRatings),
     );
+    this.clearRatingCacheButton.addEventListener('click', () => this.clearRatingCache());
+    this.backToTopButton.addEventListener('click', () => this.scrollToTop());
     this.enButton.addEventListener('click', () => void this.setLanguage('en'));
     this.zhButton.addEventListener('click', () => void this.setLanguage('zh-CN'));
     this.popularButton.addEventListener('click', () =>
@@ -2267,6 +2334,52 @@ export class FitGirlEnhancedApp {
     );
   }
 
+  private clearRatingCache(): void {
+    const removed = globalRatingCache.clear();
+    this.clearRatingCacheStatus.textContent = '';
+    if (this.clearRatingCacheStatusTimer !== null) {
+      window.clearTimeout(this.clearRatingCacheStatusTimer);
+    }
+    this.clearRatingCacheStatus.textContent =
+      removed > 0
+        ? t('clearRatingCacheSuccess', this.language)
+        : t('clearRatingCacheEmpty', this.language);
+    this.clearRatingCacheStatusTimer = window.setTimeout(() => {
+      this.clearRatingCacheStatus.textContent = '';
+      this.clearRatingCacheStatusTimer = null;
+    }, 2600);
+
+    if (!this.showRatings) return;
+    document.querySelectorAll<HTMLElement>('.fwe-rating-container').forEach((container) => {
+      const articleRoot = container.closest('article.hentry');
+      if (!(articleRoot instanceof HTMLElement)) return;
+      const article = parseArticle(articleRoot, detectPageKind());
+      if (article.kind !== 'game') return;
+      void loadRatingForBadge(container, article, this.ratingPopover, true);
+    });
+  }
+
+  private scrollToTop(): void {
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  }
+
+  private updateBackToTopVisibility(): void {
+    const visible =
+      this.mode === 'enhanced' &&
+      this.infiniteScroll &&
+      window.scrollY >= window.innerHeight * 0.65;
+    this.backToTopButton.classList.toggle('fwe-back-to-top--visible', visible);
+    this.backToTopButton.tabIndex = visible ? 0 : -1;
+    this.backToTopButton.setAttribute('aria-hidden', String(!visible));
+  }
+
+  private initBackToTopListener(): void {
+    if (this.backToTopVisibilityListenerAttached) return;
+    this.backToTopVisibilityListenerAttached = true;
+    window.addEventListener('scroll', () => this.updateBackToTopVisibility(), { passive: true });
+    window.addEventListener('resize', () => this.updateBackToTopVisibility(), { passive: true });
+  }
+
   private async setLanguage(lang: SupportedLanguage): Promise<void> {
     if (this.language === lang) return;
     this.language = lang;
@@ -2293,6 +2406,13 @@ export class FitGirlEnhancedApp {
     this.infiniteSwitchButton.setAttribute('aria-label', t('infiniteScrollAria', lang));
     this.ratingLabel.textContent = t('showRatings', lang);
     this.ratingSwitchButton.setAttribute('aria-label', t('showRatingsAria', lang));
+    this.clearRatingCacheLabel.textContent = t('clearRatingCache', lang);
+    this.clearRatingCacheButton.setAttribute('aria-label', t('clearRatingCacheAria', lang));
+    const clearRatingCacheButtonSpan = this.clearRatingCacheButton.querySelector('span');
+    if (clearRatingCacheButtonSpan)
+      clearRatingCacheButtonSpan.textContent = t('clearRatingCache', lang);
+    this.backToTopButton.setAttribute('aria-label', t('backToTopAria', lang));
+    this.backToTopButtonSpan.textContent = t('backToTop', lang);
     this.languageLabel.textContent = t('language', lang);
 
     // Update segmented buttons
@@ -2347,6 +2467,18 @@ export class FitGirlEnhancedApp {
       el.textContent = t('pinkPawBadge', lang);
     });
 
+    document.querySelectorAll<HTMLAnchorElement>('.fwe-upcoming__details-link').forEach((link) => {
+      link.textContent = t('upcomingDetails', lang);
+      link.setAttribute(
+        'aria-label',
+        t(
+          'upcomingDetailsAria',
+          { title: link.dataset.fweUpcomingTitle || 'Upcoming Repacks' },
+          lang,
+        ),
+      );
+    });
+
     // Update Card payload action buttons (Mirrors, Features, Description)
     document.querySelectorAll<HTMLElement>('.fwe-action-btn, .fwe-card-btn').forEach((btn) => {
       const targetId = btn.getAttribute('data-fwe-toggle');
@@ -2373,8 +2505,8 @@ export class FitGirlEnhancedApp {
 
   private async setMode(mode: LayoutMode): Promise<void> {
     this.switchButton.disabled = true;
-    await writeStoredLayoutMode(mode);
     this.applyMode(mode);
+    await writeStoredLayoutMode(mode);
     this.switchButton.disabled = false;
   }
 
@@ -2417,6 +2549,7 @@ export class FitGirlEnhancedApp {
       this.infiniteObserver?.disconnect();
       this.infiniteObserver = null;
     }
+    this.updateBackToTopVisibility();
   }
 
   private async setShowRatings(enabled: boolean): Promise<void> {
@@ -2463,6 +2596,7 @@ export class FitGirlEnhancedApp {
     this.browseButton.hidden = mode !== 'enhanced';
     this.viewControl.open = false;
     if (mode === 'enhanced') this.enableEnhanced();
+    this.updateBackToTopVisibility();
   }
 
   private computeColumnCount(): number {
@@ -2492,6 +2626,7 @@ export class FitGirlEnhancedApp {
 
   private enableEnhanced(): void {
     this.initResizeListener();
+    this.initBackToTopListener();
     this.transaction = new DomTransaction();
     document.querySelectorAll<HTMLElement>('.widget_archive').forEach((widget) => {
       this.transaction?.addClass(widget, 'fwe-source-hidden');
@@ -2528,6 +2663,7 @@ export class FitGirlEnhancedApp {
     if (sentinel) sentinel.remove();
     this.transaction?.restore();
     this.transaction = null;
+    this.updateBackToTopVisibility();
   }
 
   private prepareNavigation(): void {

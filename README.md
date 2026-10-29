@@ -101,7 +101,7 @@ The original FitGirl Repacks layout relies on a traditional linear blog feed. On
 
 - **Card Quick Modal**: The bottom of each card integrates `Download Mirrors`, `Features`, and `Description` buttons to view details in a clean dialog without leaving the list.
 - **Single Page Folding**: Download mirrors and file hosts are organized into clean disclosure toggles, keeping initial page height compact.
-- **DOM Normalization**: Automatically isolates WordPress clear-fix pseudo-elements and stray ad containers to eliminate unexpected blank spacing; keeps `Upcoming Repacks` pinned full-width at the top.
+- **DOM Normalization**: Automatically isolates WordPress clear-fix pseudo-elements and stray ad containers to eliminate unexpected blank spacing. `Upcoming Repacks` spans the full grid width and uses a responsive wrapped collection with a direct link to its comments.
 
 ### 5. Seamless Infinite Scroll
 

@@ -116,6 +116,33 @@ test('Upcoming、卡片和内容容器左右对齐', async ({ page }) => {
   await expect(upcomingDetails).toHaveAttribute('open', '');
   await expect(page.locator('.fwe-upcoming__body a').first()).toBeVisible();
   expect(await page.locator('.fwe-upcoming__body a').count()).toBeGreaterThan(0);
+
+  const upcomingBody = page.locator('.fwe-upcoming__body');
+  expect(
+    await upcomingBody.evaluate(
+      (node) => node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight,
+    ),
+  ).toBe(false);
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(
+      await upcomingBody.evaluate(
+        (node) => node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight,
+      ),
+    ).toBe(false);
+    expect(
+      await page.locator('.fwe-upcoming__details-link').evaluate((node) => {
+        const link = node.getBoundingClientRect();
+        const summary = node.parentElement?.getBoundingClientRect();
+        return (
+          link.left >= (summary?.left ?? 0) &&
+          link.right <= (summary?.right ?? innerWidth) &&
+          link.top >= (summary?.top ?? 0) &&
+          link.bottom <= (summary?.bottom ?? innerHeight)
+        );
+      }),
+    ).toBe(true);
+  }
 });
 
 test('列表媒体默认展开，所有媒体连续填充，且可通过设置切换默认折叠', async ({ page }) => {
@@ -248,6 +275,15 @@ test('列表卡片采用底座按钮形式，点击秒开带有Tab的磨砂玻�
 test('顶部保留桌面悬浮子菜单，Browse 提供完整路由和归档', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./');
+  const viewTrigger = page.locator('.fwe-view-control__trigger');
+  const browseTrigger = page.locator('.fwe-browse-button');
+  const desktopViewBox = await viewTrigger.boundingBox();
+  const desktopBrowseBox = await browseTrigger.boundingBox();
+  expect(desktopViewBox).not.toBeNull();
+  expect(desktopBrowseBox).not.toBeNull();
+  if (!desktopViewBox || !desktopBrowseBox) throw new Error('Desktop header controls unavailable');
+  expect(desktopBrowseBox.x + desktopBrowseBox.width).toBeLessThanOrEqual(desktopViewBox.x);
+
   const primary = page.locator('.fwe-nav-priority').first();
   await primary.hover();
   const subMenu = primary.locator('.sub-menu');
@@ -270,6 +306,12 @@ test('顶部保留桌面悬浮子菜单，Browse 提供完整路由和归档', a
   await expect(
     page.getByRole('button', { name: 'Browse site categories and monthly archives' }),
   ).toBeVisible();
+  const mobileViewBox = await page.locator('.fwe-view-control__trigger').boundingBox();
+  const mobileBrowseBox = await page.locator('.fwe-browse-button').boundingBox();
+  expect(mobileViewBox).not.toBeNull();
+  expect(mobileBrowseBox).not.toBeNull();
+  if (!mobileViewBox || !mobileBrowseBox) throw new Error('Mobile header controls unavailable');
+  expect(mobileBrowseBox.x + mobileBrowseBox.width).toBeLessThanOrEqual(mobileViewBox.x);
 });
 
 test('Digest、搜索和月度归档保持统一卡片布局', async ({ page }) => {
@@ -351,11 +393,22 @@ test('Digest 折叠符号改为原生 disclosure', async ({ page }) => {
 test('布局选择跨刷新保持，原站模式仅使用固定恢复入口', async ({ page }) => {
   await page.goto('./');
   const viewControl = page.locator('.fwe-view-control');
+  const enhancedBox = await viewControl.boundingBox();
+  expect(enhancedBox).not.toBeNull();
+  if (!enhancedBox) throw new Error('Enhanced view control unavailable');
+
   await viewControl.locator('summary').click();
   const toggle = page.getByRole('switch', { name: 'Toggle enhanced grid layout' });
   await toggle.click();
   await expect(page.locator('html')).toHaveAttribute('data-fwe-mode', 'original');
-  await expect(page.locator('.fwe-view-control')).toHaveCSS('position', 'fixed');
+  await expect(viewControl).toHaveCSS('position', 'fixed');
+  const originalBox = await viewControl.boundingBox();
+  expect(originalBox).not.toBeNull();
+  if (!originalBox) throw new Error('Original view control unavailable');
+  expect(originalBox.x + originalBox.width).toBe(enhancedBox.x + enhancedBox.width);
+  expect(originalBox.y).toBe(enhancedBox.y);
+  expect(originalBox.width).toBeLessThanOrEqual(enhancedBox.width);
+
   await expect(page.locator('.fwe-popular-button')).toBeHidden();
   await expect(page.locator('.fwe-browse-button')).toBeHidden();
   await expect(page.locator('.fwe-search')).toBeHidden();

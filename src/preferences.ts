@@ -423,7 +423,9 @@ async function readIndexedLanguage(): Promise<StoredLanguagePreference | null> {
         const value = request.result as Partial<StoredLanguagePreference> | undefined;
         database.close();
         resolve(
-          value && (value.language === 'en' || value.language === 'zh-CN') && Number.isFinite(value.updatedAt)
+          value &&
+            (value.language === 'en' || value.language === 'zh-CN') &&
+            Number.isFinite(value.updatedAt)
             ? { language: value.language, updatedAt: value.updatedAt ?? 0 }
             : null,
         );

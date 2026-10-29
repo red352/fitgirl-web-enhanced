@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { FitGirlEnhancedApp } from '../src/ui';
 import { fullPage } from './fixtures';
 
+const sampleRatingCacheKey = 'fitgirl-web-enhanced:v1:rating:sample game: deluxe edition';
+
 class NoopIntersectionObserver {
   observe = vi.fn();
   disconnect = vi.fn();
@@ -107,6 +109,7 @@ describe('Enhanced UI Lifecycle', () => {
 
     expect(document.documentElement.dataset.fweLang).toBe('zh-CN');
     expect(viewSummary?.textContent).toBe('视图');
+    expect(document.querySelector('.fwe-upcoming__details-link')?.textContent).toBe('详情与评论');
 
     // Switch back to en
     const enBtn = document.querySelector<HTMLButtonElement>('.fwe-segmented__btn:first-child');
@@ -116,6 +119,65 @@ describe('Enhanced UI Lifecycle', () => {
 
     expect(document.documentElement.dataset.fweLang).toBe('en');
     expect(viewSummary?.textContent).toBe('View');
+    expect(document.querySelector('.fwe-upcoming__details-link')?.textContent).toBe(
+      'View details & comments',
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the view control anchored consistently and clears rating cache for immediate refresh', async () => {
+    vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver);
+    vi.stubGlobal('matchMedia', () => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    document.body.innerHTML = fullPage;
+    const app = new FitGirlEnhancedApp();
+    await app.start();
+
+    const viewControl = document.querySelector<HTMLElement>('.fwe-view-control');
+    expect(viewControl).not.toBeNull();
+    expect(document.documentElement.dataset.fweMode).toBe('enhanced');
+    await Promise.resolve();
+
+    const clearButton = document.querySelector<HTMLButtonElement>('.fwe-cache-clear-button');
+    expect(clearButton).not.toBeNull();
+    expect(clearButton?.disabled).toBe(false);
+    expect(window.localStorage.getItem(sampleRatingCacheKey)).toBeNull();
+
+    window.localStorage.setItem(
+      sampleRatingCacheKey,
+      JSON.stringify({ data: null, timestamp: Date.now() }),
+    );
+    clearButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(window.localStorage.getItem(sampleRatingCacheKey)).toBeNull();
+    expect(document.querySelector('.fwe-view-control__status')?.textContent).toBe(
+      'Rating cache cleared',
+    );
+
+    const ratingToggle = document.querySelectorAll<HTMLButtonElement>('.fwe-switch')[3];
+    ratingToggle?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.documentElement.dataset.fweShowRatings).toBe('false');
+    expect(clearButton?.disabled).toBe(false);
+    window.localStorage.setItem(
+      sampleRatingCacheKey,
+      JSON.stringify({ data: null, timestamp: Date.now() }),
+    );
+    clearButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(window.localStorage.getItem(sampleRatingCacheKey)).toBeNull();
+
+    expect(document.querySelector('.fwe-upcoming__details-link')?.getAttribute('href')).toBe(
+      'http://localhost:3000/upcoming-repacks/',
+    );
+
+    const backToTop = document.querySelector<HTMLButtonElement>('.fwe-back-to-top');
+    expect(backToTop).not.toBeNull();
+    expect(backToTop?.classList.contains('fwe-back-to-top--visible')).toBe(false);
     vi.unstubAllGlobals();
   });
 });

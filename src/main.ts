@@ -1,5 +1,9 @@
 import './style.css';
-import { getFastStoredLanguage, getFastStoredLayoutMode, getFastStoredShowRatings } from './preferences';
+import {
+  getFastStoredLanguage,
+  getFastStoredLayoutMode,
+  getFastStoredShowRatings,
+} from './preferences';
 import { detectBrowserLanguage, setActiveLanguage } from './i18n';
 import { FitGirlEnhancedApp } from './ui';
 

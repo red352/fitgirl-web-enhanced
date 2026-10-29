@@ -32,6 +32,8 @@ const paths: Record<string, string> = {
   metacritic: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 15V9l4 4 4-4v6"/>',
   refresh:
     '<path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3m-8 0 1 14h8l1-14M10 11v6m4-6v6"/>',
+  arrowUp: '<path d="m5 14 7-7 7 7M12 7v13"/>',
   spinner: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
 };
 
