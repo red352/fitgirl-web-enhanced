@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FitGirl Web Enhanced
 // @namespace    https://github.com/red352/fitgirl-web-enhanced
-// @version      1.6.0
+// @version      1.7.0
 // @author       red352
 // @description  Enhance FitGirl Repacks with widescreen responsive grid, Steam ratings, media gallery, and collapsible content.
 // @license      MIT
