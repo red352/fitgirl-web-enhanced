@@ -1,0 +1,3 @@
+# Normalize all text files to LF in the working tree so Prettier (endOfLine: lf)
+# behaves identically on Windows and in CI.
+* text=auto eol=lf

@@ -35,11 +35,13 @@
 - **Auto-Update (`@updateURL` & `@downloadURL`)**: Configure reliable self-update and download URLs in the Userscript metadata header to allow script managers to silently check for new versions and prompt for updates in the background.
 
 ## Version Management & Bumping Rules
-- **Single Source of Truth (SSOT)**: `"version"` in `package.json` is the sole standard for project versioning. `vite.config.ts` must dynamically reference the version from `package.json` and must never hardcode version strings.
-- **Unified Version Bumping Command**: Version bumps must be executed via `npm run bump <patch | minor | major | x.y.z>`. Never modify multiple files manually.
+- **Single Source of Truth (SSOT)**: `"version"` in `package.json` is the only place a version number is written by hand. `vite.config.ts` must dynamically reference it and must never hardcode version strings. The README badges use the dynamic shields.io endpoint (`img.shields.io/github/package-json/v/red352/fitgirl-web-enhanced`) and must never contain a literal version. `dist/fitgirl-enhanced.user.js` is build output — its `@version` header is generated, never edited.
+- **Two Entry Points**:
+  - `npm run bump <patch | minor | major | x.y.z>` — bump `package.json` + `package-lock.json`, rebuild `dist/`, and stop. Nothing is committed.
+  - `npm run release <patch | minor | major | x.y.z>` — same pipeline, then `git commit -m "chore: release vX.Y.Z"` and an annotated tag `vX.Y.Z`. It never pushes.
   - `patch`: Bug fixes and patch releases (e.g., `1.4.1` -> `1.4.2`)
   - `minor`: New features and functionality additions (e.g., `1.4.1` -> `1.5.0`)
   - `major`: Architectural refactoring and breaking changes (e.g., `1.5.0` -> `2.0.0`)
-- **Automated Synchronization Scope**: `npm run bump` automatically synchronizes `package.json`, `package-lock.json`, and version badges in both `README.md` and `README.zh-CN.md`, and triggers `npm run build` to regenerate the Userscript artifact carrying the latest `@version` header.
-- **Compliance Boundary**: After running the version bump command, strictly follow the "No Autonomous Commits" rule and wait for explicit user confirmation before committing.
+- **Script Guarantees**: `scripts/bump-version.mjs` delegates version writing to `npm version --no-git-tag-version` (so the lockfile is always npm-format), refuses to run when the target tag already exists (and, in release mode, when the working tree is dirty), asserts the rebuilt artifact's `@version` matches `package.json`, and rolls back `package.json` / `package-lock.json` / `dist/` if the build fails. Never edit version strings across multiple files manually.
+- **Compliance Boundary**: `--release` is only run when the user explicitly asks for a release. After either command, report status and wait for explicit user confirmation before `git push`.
 

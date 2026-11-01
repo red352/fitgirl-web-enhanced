@@ -1,7 +1,7 @@
 # FitGirl Web Enhanced
 
 <p align="center">
-  <a href="https://github.com/red352/fitgirl-web-enhanced/releases"><img src="https://img.shields.io/badge/Userscript-v1.7.0-blue.svg?style=flat-square" alt="Userscript Version" /></a>
+  <a href="https://github.com/red352/fitgirl-web-enhanced/releases"><img src="https://img.shields.io/github/package-json/v/red352/fitgirl-web-enhanced?style=flat-square&amp;label=Userscript" alt="Userscript Version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License" /></a>
   <a href="https://fitgirl-repacks.site/"><img src="https://img.shields.io/badge/Target-fitgirl--repacks.site-purple.svg?style=flat-square" alt="Target Site" /></a>
   <a href="#permissions--privacy-security"><img src="https://img.shields.io/badge/Permissions-Minimal-success.svg?style=flat-square" alt="Permissions: Minimal" /></a>
