@@ -129,6 +129,12 @@ The original FitGirl Repacks layout relies on a traditional linear blog feed. On
 - Synchronous Fast-Path state check executed at `@run-at: document-start` injects view control attributes during initial DOM parsing, completely preventing Flash of Unstyled Content (FOUC).
 - Preferences use dual-layer fault-tolerant storage across `localStorage` and `IndexedDB`, kept in sync across sessions and tabs.
 
+### 9. Light / Dark / System Themes
+
+- A **Theme** selector in the top **View** menu offers `Light`, `Dark`, and `System` (follow the OS setting).
+- All colors are driven by CSS custom properties, so the whole page — cards, dialogs, and controls — flips together while text stays readable.
+- The active theme persists across sessions through namespaced storage and is applied before first paint to avoid a flash of the wrong theme.
+
 ---
 
 ## Interface Preview
@@ -230,7 +236,13 @@ src/
 ├── icons.ts        # Inline SVG icon generator
 ├── style.css       # Media queries, container queries, and scoped styling rules
 └── main.ts         # Lifecycle initialization entry and runtime sandbox bootstrapper
+scripts/
+├── capture-assets.mjs    # Headless capture of documentation preview assets
+├── bump-version.mjs      # Single-source-of-truth version bump and release tooling
+└── escape-non-ascii.ts   # Escapes non-ASCII source text for the ASCII-only artifact
 ```
+
+The file tree and storage keys below are a summary; the authoritative definitions live in the source files linked above.
 
 - **Reversible Transactions**:
   DOM transformations are strictly non-destructive. A transaction manager captures original parent containers, sibling positions, inline styles, and class lists. Toggling back to `Original View` replays operations in reverse, restoring the page to 100% native state.
@@ -250,13 +262,10 @@ src/
 - **Zero Privacy Tracking & Read-Only Requests**:
   - Steam rating requests use public read-only APIs without transmitting user tokens, cookies, account credentials, or private information;
   - Contains no analytics trackers, beacons, telemetry, or third-party analytics services. Your browsing history is never recorded or uploaded.
-- **Namespaced Local Storage**: Configurations and cache data are stored under namespaced keys:
-  - `fitgirl-web-enhanced:v1:layout-mode`: View mode configuration (`enhanced` / `original`);
-  - `fitgirl-web-enhanced:v1:media-expand`: Default screenshot expand preference;
-  - `fitgirl-web-enhanced:v1:infinite-scroll`: Infinite scroll toggle;
-  - `fitgirl-web-enhanced:v1:show-ratings`: Game ratings display toggle;
-  - `fitgirl-web-enhanced:v1:language`: UI language preference (`en` / `zh-CN`);
-  - `fitgirl-web-enhanced:ratings:v1`: Local Steam ratings cache dictionary (7-day TTL eviction).
+- **Namespaced Local Storage**: Configurations and cache data use a distinct prefix. The authoritative key constants are exported from `src/dom.ts`, `src/preferences.ts`, `src/rating.ts`, and `src/ui.ts`; the categories are:
+  - View mode, media-expand, infinite-scroll, show-ratings, language, and theme preferences;
+  - Per-listing scroll position under an `infinite-pages:` key prefix;
+  - A local Steam ratings cache under an `rating:` prefix (7-day positive TTL, 3-day negative TTL).
 
 ---
 
@@ -301,7 +310,7 @@ npm run test
 npm run build
 
 # Bump version uniformly (syncs package.json, package-lock.json, README badges, and rebuilds)
-npm run bump patch   # or minor, major, 1.5.0
+npm run bump patch   # or minor, major, x.y.z
 
 # Run Playwright E2E and visual snapshot tests
 npm run test:e2e

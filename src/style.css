@@ -9,6 +9,133 @@
   --fwe-header: #08080a;
   --fwe-shadow: 0 14px 36px rgb(27 27 31 / 8%);
   --fwe-radius: 5px;
+
+  /*
+   * 亮色值保持 P0 调好的原样，暗色整套覆盖见下面的
+   * `html[data-fwe-theme='dark']`。新增的这几颗是「我们自己写死的浅色」：
+   * 卡片内衬、图片占位、浮层、强调色上的前景色——原先这些位置直接写了
+   * #fff / #faf8f4 之类的字面量，暗色下会变成一块白板。
+   */
+  --fwe-wash: #faf8f4;
+  --fwe-sunken: #dedad4;
+  --fwe-panel: rgb(255 255 255 / 96%);
+  --fwe-panel-deep: #fdfbf7;
+  --fwe-on-accent: #ffffff;
+  --fwe-accent-hover: #e00e79;
+  --fwe-accent-wash: #fff5fa;
+  --fwe-ghost: #f3f0ea;
+  --fwe-elevate: #eeeae0;
+  --fwe-link: #24890d;
+  /*
+   * 评分梯级（P0 立下的「中性底 + 分数色左边线，数字本身保持可读」）。
+   * 亮色原先直接用 #10b981 / #38bdf8 / #f59e0b / #ef4444：后三个在
+   * --fwe-paper 上只有 1.93–3.40:1，数字基本读不出来。改为同色系的
+   * 700 级，四项都在 4.5:1 以上（见 test/style.test.ts 的对比度断言）。
+   */
+  --fwe-rating-overwhelming: #0f766e;
+  --fwe-rating-positive: #0369a1;
+  --fwe-rating-mixed: #b45309;
+  --fwe-rating-negative: #b91c1c;
+  /*
+   * 评分弹层与 Metacritic 梯级。弹层原先写死一套深色表面（rgba(20,24,33,0.95)
+   * 底 + #f1f5f9 字），浅色模式下是一块与页面无关的深色贴纸；meta 梯级直接
+   * 抄了暗色专用的 #4ade80/#fbbf24/#f87171。两者都改成令牌，三处主题同步。
+   */
+  --fwe-popover-bg: #fffdf9;
+  --fwe-popover-line: #ded9d2;
+  --fwe-popover-shadow: 0 16px 36px rgb(27 27 31 / 14%);
+  --fwe-meta-good: #15803d;
+  --fwe-meta-warn: #b45309;
+  --fwe-meta-bad: #b91c1c;
+}
+
+/*
+ * 主题三态（P1）。`system` 不在这里被解析成具体颜色：它只把 color-scheme
+ * 设为 `light dark`，让 UA 级默认值（表单控件、滚动条）跟随系统，我们自己的
+ * 令牌则由下方 `@media (prefers-color-scheme: dark)` 里同一份值切换。
+ * 这样系统切换是纯 CSS 的，不需要脚本重新跑一遍，也不会闪一帧。
+ *
+ * 刻意不用 light-dark()：三态必须能各自强制一个 scheme，而 light-dark()
+ * 只在 color-scheme 同时允许两种颜色时才有值。
+ */
+html[data-fwe-theme='light'] {
+  color-scheme: light;
+}
+
+html[data-fwe-theme='system'] {
+  color-scheme: light dark;
+}
+
+html[data-fwe-theme='dark'] {
+  color-scheme: dark;
+
+  --fwe-ink: #e9e5de;
+  --fwe-muted: #a6a29c;
+  --fwe-paper: #131317;
+  --fwe-card: #1e1d23;
+  --fwe-line: #332f3a;
+  --fwe-pink: #f65d9e;
+  --fwe-header: #08080a;
+  --fwe-shadow: 0 14px 36px rgb(0 0 0 / 45%);
+  --fwe-wash: rgb(255 255 255 / 4%);
+  --fwe-sunken: #101014;
+  --fwe-panel: rgb(30 29 35 / 96%);
+  --fwe-panel-deep: #17171c;
+  --fwe-on-accent: #131317;
+  --fwe-accent-hover: #ff77b4;
+  --fwe-accent-wash: rgb(246 93 158 / 14%);
+  --fwe-ghost: rgb(255 255 255 / 6%);
+  --fwe-elevate: rgb(255 255 255 / 6%);
+  --fwe-link: #f65d9e;
+  --fwe-green: #8ab539;
+  --fwe-rating-overwhelming: #3fae7e;
+  --fwe-rating-positive: #5fa8d9;
+  --fwe-rating-mixed: #e0a32e;
+  --fwe-rating-negative: #ef6b63;
+  --fwe-popover-bg: #1e1d23;
+  --fwe-popover-line: #332f3a;
+  --fwe-popover-shadow: 0 16px 36px rgb(0 0 0 / 50%);
+  --fwe-meta-good: #4ade80;
+  --fwe-meta-warn: #fbbf24;
+  --fwe-meta-bad: #f87171;
+}
+
+/*
+ * 上面那份暗色值的第二份拷贝。两处必须逐字相同——`test/style.test.ts` 会把
+ * 两个令牌表取出来做相等断言，所以改一处忘了另一处会直接红。
+ */
+@media (prefers-color-scheme: dark) {
+  html[data-fwe-theme='system'] {
+    --fwe-ink: #e9e5de;
+    --fwe-muted: #a6a29c;
+    --fwe-paper: #131317;
+    --fwe-card: #1e1d23;
+    --fwe-line: #332f3a;
+    --fwe-pink: #f65d9e;
+    --fwe-header: #08080a;
+    --fwe-shadow: 0 14px 36px rgb(0 0 0 / 45%);
+    --fwe-wash: rgb(255 255 255 / 4%);
+    --fwe-sunken: #101014;
+    --fwe-panel: rgb(30 29 35 / 96%);
+    --fwe-panel-deep: #17171c;
+    --fwe-on-accent: #131317;
+    --fwe-accent-hover: #ff77b4;
+    --fwe-accent-wash: rgb(246 93 158 / 14%);
+    --fwe-ghost: rgb(255 255 255 / 6%);
+    --fwe-elevate: rgb(255 255 255 / 6%);
+    --fwe-link: #f65d9e;
+    --fwe-green: #8ab539;
+    --fwe-rating-overwhelming: #3fae7e;
+    --fwe-rating-positive: #5fa8d9;
+    --fwe-rating-mixed: #e0a32e;
+    --fwe-rating-negative: #ef6b63;
+    --fwe-popover-bg: #1e1d23;
+    --fwe-popover-line: #332f3a;
+    --fwe-popover-shadow: 0 16px 36px rgb(0 0 0 / 50%);
+    --fwe-meta-good: #4ade80;
+    --fwe-meta-warn: #fbbf24;
+    --fwe-meta-bad: #f87171;
+  }
 }
 
 .fwe-icon {
@@ -247,7 +374,7 @@
   border: 0;
   background: transparent;
   border-radius: 999px;
-  color: #b3adb1;
+  color: var(--fwe-muted);
   cursor: pointer;
   transition: all 160ms ease;
   line-height: 1.2;
@@ -255,13 +382,13 @@
 
 .fwe-segmented__btn[aria-pressed='true'] {
   background: var(--fwe-pink);
-  color: #ffffff;
+  color: var(--fwe-on-accent);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .fwe-segmented__btn:hover:not([aria-pressed='true']) {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--fwe-ink);
+  background: var(--fwe-elevate);
 }
 
 .fwe-icon-button {
@@ -724,7 +851,7 @@ html[data-fwe-mode='original'] .fwe-game-dialog {
   width: 4.25rem;
   height: 4.25rem;
   border-radius: 2px;
-  background: #e5e1db;
+  background: var(--fwe-sunken);
   object-fit: cover;
 }
 
@@ -849,8 +976,15 @@ html[data-fwe-mode='original'] .fwe-back-to-top {
   display: none;
 }
 
+/*
+ * `color-scheme` deliberately absent here. It used to be hardcoded to `light`
+ * for the UA's own widgets, which out-specified the theme rules on the root
+ * element (0,2,0 vs 0,1,1) and pinned the page to light in dark mode. The
+ * `html[data-fwe-theme=…]` block at the top of this file now owns it for all
+ * three states, and `syncPreloadState()` writes that attribute unconditionally,
+ * so enhanced mode is always covered.
+ */
 html[data-fwe-mode='enhanced'] {
-  color-scheme: light;
   background: var(--fwe-paper);
 }
 
@@ -873,6 +1007,48 @@ html[data-fwe-mode='enhanced'] #page {
   max-width: none;
   margin: 0;
   background: transparent;
+}
+
+/*
+ * 主题自身皮肤的中和（P1「做整页」的代价）。
+ *
+ * 站点主题 twentyfourteen-fg 只写了三条会影响增强页面的规则：
+ *   body, button, input, select, textarea { color: #2b2b2b }
+ *   .site-content .entry-header / .entry-content / .entry-summary / .page-content { background: #fff }
+ *   a { color: #24890d }
+ * 前两条在这里用令牌中和——令牌在暗色下自动翻面，所以只需要一份规则，
+ * 不需要为每个主题状态各写一遍。链接色刻意保留主题的绿色（`--fwe-link`
+ * 亮色值就是 #24890d）：它 4.6:1 达标，而且是这个站点的识别色，
+ * 但暗色下 3.07:1 不够，所以值本身随令牌走。
+ *
+ * `:where()` 把选择器的特异性压到只有一个属性选择器，这样我们自己
+ * 那些 (0,1,0) 的组件规则不会被它反超。
+ */
+html[data-fwe-mode='enhanced'] body {
+  color: var(--fwe-ink);
+}
+
+html[data-fwe-mode='enhanced']
+  :is(
+    .site-content .entry-header,
+    .site-content .entry-content,
+    .site-content .entry-summary,
+    .page-content
+  ) {
+  background: transparent;
+}
+
+html[data-fwe-mode='enhanced']
+  :where(#comments, .comments-area, .fwe-extras-block)
+  :where(input, select, textarea) {
+  color: var(--fwe-ink);
+}
+
+/* 正文里没带 class 的链接：主题的绿色在暗色下不够，换成随令牌走的链接色 */
+html[data-fwe-mode='enhanced']
+  :where(.entry-content, .page-content, .entry-summary)
+  a:not([class]) {
+  color: var(--fwe-link);
 }
 
 html[data-fwe-mode='enhanced'] #page::before,
@@ -964,7 +1140,12 @@ html[data-fwe-mode='enhanced'] .site-title a:focus {
   color: #ff168d !important;
 }
 
-html[data-fwe-mode='enhanced'] .site-description {
+/*
+ * 站名描述（即侧栏里的防伪警示）在增强模式下原本被隐藏；
+ * 迁移进 .fwe-site-extras 后必须显式恢复显示，否则主题与上方规则
+ * 都会继续把它压成 display:none。
+ */
+html[data-fwe-mode='enhanced'] .site-description:not(.fwe-extras-notice__text) {
   display: none;
 }
 
@@ -1196,6 +1377,11 @@ html[data-fwe-mode='enhanced'] .fwe-stream article .fwe-disclosures {
   margin-top: auto;
 }
 
+/*
+ * 白名单里的 `.fwe-site-extras` 是必需的：详情页 extras 现在插在 `#content`
+ * 内、评论区之前（见 ui.ts 的 prepareSiteExtras），漏掉它就会被这条
+ * `display: none !important` 整块压掉。
+ */
 html[data-fwe-mode='enhanced']
   #content
   > :not(
@@ -1206,6 +1392,7 @@ html[data-fwe-mode='enhanced']
     .navigation,
     .paging-navigation,
     .post-navigation,
+    .fwe-site-extras,
     .tolstoycomments-feed,
     #comments,
     .comments-area
@@ -1239,6 +1426,32 @@ html[data-fwe-mode='enhanced'] .fwe-result-card {
     box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/*
+ * 公告 / 摘要卡：内容本身不是游戏，不该拿到和游戏卡一样的重量。
+ * 虚线边说明「这是一段文字」，不拉伸、不投影，配一枚种类标签。
+ */
+html[data-fwe-mode='enhanced'] .fwe-notice,
+html[data-fwe-mode='enhanced'] .fwe-digest {
+  align-self: start;
+  height: fit-content;
+  border-style: dashed;
+  box-shadow: none;
+  font-size: 0.82rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-card-kind {
+  display: inline-block;
+  margin: 0 0 0.4rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  background: var(--fwe-paper);
+  color: var(--fwe-muted);
+  font-size: 0.6rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 html[data-fwe-mode='enhanced'] .fwe-stream .fwe-game-card:hover {
   transform: translateY(-2px);
   box-shadow:
@@ -1248,13 +1461,22 @@ html[data-fwe-mode='enhanced'] .fwe-stream .fwe-game-card:hover {
 
 html[data-fwe-mode='enhanced'] .fwe-game-card {
   content-visibility: auto;
-  contain-intrinsic-size: auto 52rem;
+  contain-intrinsic-size: auto 30rem;
 }
 
+/*
+ * 卡片标题栏分区：标题与评分同排（标题左、分数右），元信息胶囊独占下一行。
+ * 日期 / 分类 / 作者 / 评论数四枚胶囊合计可超过 380px，若与标题挤在同一个
+ * flex 行里，标题会被压缩到 0 宽（桌面与平板同样会中招），故固定用网格分区。
+ */
 html[data-fwe-mode='enhanced'] article .entry-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'title right'
+    'meta meta';
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.4rem 0.65rem;
   box-sizing: border-box;
   width: 100%;
   max-width: none;
@@ -1264,7 +1486,7 @@ html[data-fwe-mode='enhanced'] article .entry-header {
 }
 
 html[data-fwe-mode='enhanced'] article .entry-title {
-  flex: 1;
+  grid-area: title;
   min-width: 0;
   margin: 0;
   color: var(--fwe-ink);
@@ -1302,11 +1524,51 @@ html[data-fwe-mode='enhanced'] .entry-header > time {
 
 html[data-fwe-mode='enhanced'] .fwe-article-meta {
   display: flex;
+  grid-area: meta;
   align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0;
   color: var(--fwe-muted);
   font-size: 0.72rem;
+}
+
+/* 由原始 .entry-meta 迁移而来的评论数 / 分类 / 作者胶囊 */
+html[data-fwe-mode='enhanced'] .fwe-meta-chip {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--fwe-muted);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-meta-chip__icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: none;
+  opacity: 0.7;
+}
+
+/* 合并后的日期胶囊文本（「今天 · 17/11/2026」）在 390px 下必须能换行 */
+html[data-fwe-mode='enhanced'] .fwe-meta-chip__date {
+  overflow-wrap: anywhere;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-meta-chip a {
+  color: inherit;
+  text-decoration: none;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-meta-chip a:hover {
+  color: var(--fwe-pink);
+  text-decoration: underline;
+}
+
+/* 原始 markup 里的 Font Awesome 字形由自有图标取代，避免重复 */
+html[data-fwe-mode='enhanced'] .fwe-meta-chip .fa {
+  display: none;
 }
 
 html[data-fwe-mode='enhanced'] article .entry-content,
@@ -1355,16 +1617,17 @@ html[data-fwe-mode='enhanced'] .fwe-cover {
 }
 
 html[data-fwe-mode='enhanced'] .fwe-game-card .fwe-cover {
-  max-height: 13.5rem;
-  min-height: 9rem;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 4;
 }
 
 html[data-fwe-mode='enhanced'] .fwe-cover--placeholder {
   display: grid;
   min-height: 9rem;
   place-items: center;
-  color: #938e88;
-  background: #e6e2dc;
+  color: var(--fwe-muted);
+  background: var(--fwe-sunken);
   font-size: 0.75rem;
   text-transform: uppercase;
 }
@@ -1406,7 +1669,7 @@ html[data-fwe-mode='enhanced'] .fwe-fact__label {
 html[data-fwe-mode='enhanced'] .fwe-fact__label .fwe-icon {
   width: 0.9rem;
   height: 0.9rem;
-  color: var(--fwe-pink);
+  color: var(--fwe-muted);
 }
 
 html[data-fwe-mode='enhanced'] .fwe-fact__value {
@@ -1426,7 +1689,7 @@ html[data-fwe-mode='enhanced'] .fwe-media {
   margin-top: 0.95rem;
   border: 1px solid var(--fwe-line);
   border-radius: 3px;
-  background: #faf8f4;
+  background: var(--fwe-wash);
 }
 
 html[data-fwe-mode='enhanced'] .fwe-media__summary {
@@ -1453,6 +1716,11 @@ html[data-fwe-mode='enhanced'] .fwe-media__summary > .fwe-icon:first-child {
 
 html[data-fwe-mode='enhanced'] .fwe-media__label {
   flex: 1;
+  color: var(--fwe-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
 html[data-fwe-mode='enhanced'] .fwe-media__count {
@@ -1479,6 +1747,34 @@ html[data-fwe-mode='enhanced'] .fwe-game-card .fwe-media__gallery {
   padding: 0 0.75rem 0.75rem;
 }
 
+/*
+ * 默认折叠后的第一印象：只剩一行 summary 是个空壳。折叠态改 4 列胶片条，
+ * 第 5 张起收起——既收得住高度，也让人知道里面有东西。
+ */
+html[data-fwe-mode='enhanced'] .fwe-game-card .fwe-media:not([open]) .fwe-media__gallery {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+html[data-fwe-mode='enhanced']
+  .fwe-game-card
+  .fwe-media:not([open])
+  .fwe-media__gallery
+  > :nth-child(n + 5) {
+  display: none;
+}
+
+/*
+ * Chromium 从 131 起用 `::details-content { content-visibility: hidden }` 表示
+ * 关闭的 <details>：内容不再绘制，连上面那条胶片条规则也一起被藏掉，卡里只剩
+ * 一块空白。显式恢复渲染，折叠态才真的看得到前 4 张（不支持该伪元素的浏览器
+ * 会忽略整条规则，退回原生的「折叠即隐藏」，不会坏）。
+ */
+html[data-fwe-mode='enhanced'] .fwe-game-card .fwe-media::details-content {
+  content-visibility: visible;
+}
+
 html[data-fwe-mode='enhanced'] .fwe-detail .fwe-media__gallery {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1496,7 +1792,7 @@ html[data-fwe-mode='enhanced'] .fwe-media__item {
   min-width: 0;
   overflow: hidden;
   border-radius: 4px;
-  background: #dedad4;
+  background: var(--fwe-sunken);
   aspect-ratio: 16 / 9;
   cursor: zoom-in;
   transition:
@@ -1533,11 +1829,10 @@ html[data-fwe-mode='enhanced'] .fwe-card-actions {
   margin-top: auto;
   padding: 0.75rem 0.85rem;
   border-top: 1px solid var(--fwe-line);
-  background: rgba(250, 248, 245, 0.85);
+  background: var(--fwe-wash);
 }
 
 html[data-fwe-mode='enhanced'] .fwe-card-btn {
-  flex: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1559,20 +1854,35 @@ html[data-fwe-mode='enhanced'] .fwe-card-btn {
 html[data-fwe-mode='enhanced'] .fwe-card-btn:hover {
   border-color: var(--fwe-pink);
   color: var(--fwe-pink);
-  background: #fff5fa;
+  background: var(--fwe-accent-wash);
   transform: translateY(-1px);
 }
 
+/* 次级动作：不抢下载按钮的注意力 */
+html[data-fwe-mode='enhanced'] .fwe-card-btn--ghost {
+  flex: 1;
+  border-color: transparent;
+  background: transparent;
+  color: var(--fwe-muted);
+  font-weight: 650;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-card-btn--ghost:hover {
+  border-color: var(--fwe-line);
+  background: var(--fwe-ghost);
+}
+
 html[data-fwe-mode='enhanced'] .fwe-card-btn--primary {
+  flex: 2.1;
   border-color: var(--fwe-pink);
   background: var(--fwe-pink);
-  color: #ffffff;
+  color: var(--fwe-on-accent);
 }
 
 html[data-fwe-mode='enhanced'] .fwe-card-btn--primary:hover {
-  background: #e00e79;
-  border-color: #e00e79;
-  color: #ffffff;
+  background: var(--fwe-accent-hover);
+  border-color: var(--fwe-accent-hover);
+  color: var(--fwe-on-accent);
   box-shadow: 0 4px 12px rgba(255, 22, 141, 0.25);
 }
 
@@ -1585,7 +1895,7 @@ html[data-fwe-mode='enhanced'] .fwe-game-dialog {
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--fwe-panel);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   box-shadow:
@@ -1612,7 +1922,7 @@ html[data-fwe-mode='enhanced'] .fwe-game-dialog__header {
   flex-direction: column;
   padding: 1.1rem 1.25rem 0;
   border-bottom: 1px solid var(--fwe-line);
-  background: #faf8f5;
+  background: var(--fwe-panel-deep);
 }
 
 html[data-fwe-mode='enhanced'] .fwe-game-dialog__title-row {
@@ -1716,7 +2026,7 @@ html[data-fwe-mode='enhanced'] .fwe-direct-links-details {
   margin: 0.75rem 0;
   border: 1px solid var(--fwe-line);
   border-radius: 6px;
-  background: #fdfbf7;
+  background: var(--fwe-panel-deep);
   overflow: hidden;
 }
 
@@ -1726,7 +2036,7 @@ html[data-fwe-mode='enhanced'] .fwe-direct-links-summary {
   align-items: center;
   gap: 0.5rem;
   padding: 0.55rem 0.85rem;
-  background: #f5f2eb;
+  background: var(--fwe-wash);
   color: var(--fwe-ink);
   font-size: 0.78rem;
   font-weight: 780;
@@ -1741,7 +2051,7 @@ html[data-fwe-mode='enhanced'] .fwe-direct-links-summary::-webkit-details-marker
 }
 
 html[data-fwe-mode='enhanced'] .fwe-direct-links-summary:hover {
-  background: #eeeae0;
+  background: var(--fwe-elevate);
   color: var(--fwe-pink);
 }
 
@@ -1761,7 +2071,7 @@ html[data-fwe-mode='enhanced'] .fwe-direct-links-content {
   border-top: 1px solid var(--fwe-line);
   font-size: 0.82rem;
   line-height: 1.6;
-  background: #ffffff;
+  background: transparent;
 }
 
 /* 单篇详情页（Single Post）原生分组卡片排版 */
@@ -1785,7 +2095,7 @@ html[data-fwe-mode='enhanced'] .fwe-detail-section__header {
   align-items: center;
   gap: 0.6rem;
   padding: 0.75rem 1.1rem;
-  background: #faf8f4;
+  background: var(--fwe-wash);
   border-bottom: 1px solid var(--fwe-line);
   color: var(--fwe-ink);
 }
@@ -1844,7 +2154,7 @@ html[data-fwe-mode='enhanced'] .fwe-upcoming__details-link {
   padding: 0.2rem 0.5rem;
   border: 1px solid rgb(48 125 37 / 25%);
   border-radius: 999px;
-  color: #307d25;
+  color: var(--fwe-green);
   font-size: 0.68rem;
   font-weight: 800;
   text-decoration: none;
@@ -1852,8 +2162,8 @@ html[data-fwe-mode='enhanced'] .fwe-upcoming__details-link {
 }
 
 html[data-fwe-mode='enhanced'] .fwe-upcoming__details-link:hover {
-  color: white;
-  background: #307d25;
+  color: var(--fwe-on-accent);
+  background: var(--fwe-green);
 }
 
 html[data-fwe-mode='enhanced'] .fwe-upcoming__summary::-webkit-details-marker {
@@ -1910,78 +2220,80 @@ html[data-fwe-mode='enhanced'] .fwe-upcoming__source {
   display: none;
 }
 
-/* 人体工学时序优先级：第一张（最新发布）卡片突出强调 */
-html[data-fwe-mode='enhanced'] .fwe-stream article.hentry:first-of-type,
-html[data-fwe-mode='enhanced'] article.hentry[data-fwe-rank='latest'] {
-  border-color: rgb(255 22 141 / 40%) !important;
-  box-shadow:
-    0 4px 20px -2px rgb(255 22 141 / 15%),
-    var(--fwe-shadow);
-}
-
-html[data-fwe-mode='enhanced'] .fwe-order-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.35rem;
-  padding: 0 0.5rem;
-  border-radius: 4px;
-  background: rgb(0 0 0 / 5%);
-  color: var(--fwe-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-
-/* 前三位卡片高优先级视觉阶梯 */
-html[data-fwe-mode='enhanced'] article.hentry[data-fwe-rank='1'] .fwe-order-badge,
-html[data-fwe-mode='enhanced'] .fwe-order-badge[data-rank='1'] {
-  background: var(--fwe-pink);
-  color: #fff;
-  box-shadow: 0 2px 8px rgb(255 22 141 / 40%);
-}
-
-html[data-fwe-mode='enhanced'] article.hentry[data-fwe-rank='2'] .fwe-order-badge,
-html[data-fwe-mode='enhanced'] .fwe-order-badge[data-rank='2'] {
-  background: rgb(255 22 141 / 16%);
-  color: var(--fwe-pink);
-  font-weight: 800;
-}
-
-html[data-fwe-mode='enhanced'] article.hentry[data-fwe-rank='3'] .fwe-order-badge,
-html[data-fwe-mode='enhanced'] .fwe-order-badge[data-rank='3'] {
-  background: rgb(255 22 141 / 10%);
-  color: var(--fwe-pink);
-}
-
-/* 时序卡片标题右上方的相对发布时间胶囊 */
+/* 时序卡片标题右侧的评分徽标（与标题同行） */
 html[data-fwe-mode='enhanced'] .fwe-header-right {
   display: flex;
+  grid-area: right;
   align-items: center;
   gap: 0.45rem;
-  margin-left: auto;
+  margin-left: 0;
   flex-shrink: 0;
+  justify-self: end;
 }
 
-html[data-fwe-mode='enhanced'] .fwe-time-ago {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.18rem 0.45rem;
-  border-radius: 999px;
-  background: rgb(0 0 0 / 4%);
-  color: var(--fwe-muted);
-  font-size: 0.68rem;
-  font-weight: 500;
-  white-space: nowrap;
+/* 单篇文章的上一篇/下一篇导航（无限滚动不得隐藏它） */
+html[data-fwe-mode='enhanced'] #content > .post-navigation {
+  max-width: none;
+  margin: 0.25rem 0 0;
+  padding: 0.9rem 0 0;
+  border-top: 1px solid var(--fwe-line);
 }
 
-html[data-fwe-mode='enhanced'] article.hentry[data-fwe-rank='1'] .fwe-time-ago {
-  background: rgb(255 22 141 / 10%);
+html[data-fwe-mode='enhanced'] #content > .post-navigation .nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+html[data-fwe-mode='enhanced'] #content > .post-navigation .nav-links a {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  flex: 1 1 12rem;
+  gap: 0.15rem;
+  color: var(--fwe-ink);
+  font-size: 0.85rem;
+  font-weight: 650;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+/* 标题独占一个块并单独 clamp：标签/箭头不再占用行数，长标题能显示满 2 行 */
+html[data-fwe-mode='enhanced'] #content > .post-navigation .nav-links .fwe-nav-title {
+  display: -webkit-box;
+  min-width: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+html[data-fwe-mode='enhanced'] #content > .post-navigation .fwe-nav-arrow {
+  width: 0.8rem;
+  height: 0.8rem;
+  margin: 0 0.15rem;
+  vertical-align: middle;
+}
+
+html[data-fwe-mode='enhanced'] #content > .post-navigation .nav-links a:hover {
   color: var(--fwe-pink);
-  font-weight: 600;
+}
+
+html[data-fwe-mode='enhanced'] #content > .post-navigation .nav-links a[rel='next'] {
+  justify-content: flex-end;
+}
+
+html[data-fwe-mode='enhanced'] #content > .post-navigation .nav-links a[rel='next'] .fwe-nav-title {
+  text-align: right;
+}
+
+html[data-fwe-mode='enhanced'] #content > .post-navigation .meta-nav {
+  color: var(--fwe-pink);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  /* 标签/箭头与标题分块后，间距由 <a> 的 flex gap 统一控制；标签不参与压缩 */
+  flex-shrink: 0;
 }
 
 html[data-fwe-mode='enhanced'] .fwe-infinite-sentinel {
@@ -2007,15 +2319,6 @@ html[data-fwe-mode='enhanced'] .fwe-infinite-loader {
   box-shadow: var(--fwe-shadow);
 }
 
-html[data-fwe-mode='enhanced'] .fwe-infinite-loader__spinner {
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid rgb(255 22 141 / 20%);
-  border-top-color: var(--fwe-pink);
-  border-radius: 50%;
-  animation: fwe-spin 0.8s linear infinite;
-}
-
 @keyframes fwe-spin {
   to {
     transform: rotate(360deg);
@@ -2030,6 +2333,116 @@ html[data-fwe-mode='enhanced'] .fwe-infinite-end {
   background: rgb(0 0 0 / 4%);
   color: var(--fwe-muted);
   font-size: 0.75rem;
+}
+
+/* ==========================================================================
+   加载骨架屏（Infinite Scroll Loading Skeleton）
+   --------------------------------------------------------------------------
+   取代原来的转圈：占位与真实卡同形，内容落地时整页不会跳。整节只用 `--fwe-line` 一档中性色——粉色只留给主操作。
+   ========================================================================== */
+
+/* 与 .fwe-stream 同一套网格参数，骨架行才能落在真实卡那一行的列上 */
+html[data-fwe-mode='enhanced'] .fwe-skeleton {
+  display: grid;
+  grid-template-columns: repeat(var(--fwe-skeleton-cols, 2), minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: stretch;
+  width: 100%;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 30rem;
+  padding: 1.1rem 1.25rem 0.85rem;
+  border: 1px solid var(--fwe-line);
+  border-radius: var(--fwe-radius);
+  background: var(--fwe-card);
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton-card__meta {
+  display: flex;
+  gap: 0.35rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton-card__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.3rem;
+}
+
+/* 唯一的着色规则：所有占位块共用一档中性色与一次呼吸动画 */
+html[data-fwe-mode='enhanced'] .fwe-skeleton__block {
+  display: block;
+  background: var(--fwe-line);
+  border-radius: 3px;
+  animation: fwe-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton__title-line {
+  height: 1.1rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton__title-line:last-child {
+  width: 62%;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton__meta-line {
+  width: 45%;
+  height: 0.72rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton__fact-row {
+  height: 0.8rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton__fact-row:nth-child(even) {
+  width: 78%;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton__gallery {
+  flex: 1;
+  min-height: 8rem;
+  margin-top: 0.6rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton__actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-skeleton__action {
+  flex: 1;
+  height: 2.15rem;
+  border-radius: 4px;
+}
+
+/* 骨架本身就是进度指示，这里只留一行小字说明在等什么 */
+html[data-fwe-mode='enhanced'] .fwe-skeleton__label {
+  grid-column: 1 / -1;
+  margin: 0.9rem 0 0;
+  color: var(--fwe-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+@keyframes fwe-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 html[data-fwe-mode='enhanced'] .fwe-special,
@@ -2132,6 +2545,315 @@ html[data-fwe-mode='enhanced'] .fwe-directory-tile__title {
   -webkit-line-clamp: 3;
 }
 
+/* 侧栏 / 页脚内容复原区：固定在 #main 末尾，避免落入 #content 的流式网格 */
+html[data-fwe-mode='enhanced'] .fwe-site-extras {
+  display: grid;
+  width: min(calc(100% - clamp(2rem, 5vw, 5rem)), 140rem);
+  margin: 2.5rem auto 0;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+  align-items: start;
+}
+
+/*
+ * 详情页 extras 挂在 `#content` 里（评论区之前，见 prepareSiteExtras）。而
+ * `#content` 自己已经是 `width: min(calc(100% - clamp(2rem, 5vw, 5rem)), 140rem)`
+ * 的居中列，基础规则再算一次 margin/宽度会把 extras 再缩一圈，和它上面的
+ * 文章对不齐。放进 #content 时改用整幅宽度，上下间距交给 #content 的 gap。
+ */
+html[data-fwe-mode='enhanced'] #content > .fwe-site-extras {
+  width: 100%;
+  margin: 0.25rem 0 0;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block {
+  min-width: 0;
+  padding: 1rem 1.15rem 1.15rem;
+  border: 1px solid var(--fwe-line);
+  border-radius: var(--fwe-radius);
+  background: var(--fwe-card);
+  box-shadow: var(--fwe-shadow);
+  color: var(--fwe-muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block--wide,
+html[data-fwe-mode='enhanced'] .fwe-extras-notice {
+  grid-column: 1 / -1;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block__title {
+  margin: 0 0 0.6rem;
+  color: var(--fwe-ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-notice {
+  border-color: rgb(255 22 141 / 25%);
+  background: rgb(255 22 141 / 6%);
+  color: var(--fwe-ink);
+  font-size: 0.82rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-notice__text {
+  display: block;
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block a {
+  color: var(--fwe-pink);
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block p {
+  margin: 0 0 0.5rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block p:last-child {
+  margin-bottom: 0;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block :is(table, img, iframe, audio, video) {
+  max-width: 100%;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block :is(td, th) {
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--fwe-line);
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--fwe-ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block :is(input, button, select, textarea) {
+  box-sizing: border-box;
+  max-width: 100%;
+  font: inherit;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block input:not([type='submit'], [type='button']) {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--fwe-line);
+  border-radius: var(--fwe-radius);
+  background: var(--fwe-panel-deep);
+  color: var(--fwe-ink);
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block button {
+  margin-top: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid transparent;
+  border-radius: var(--fwe-radius);
+  background: var(--fwe-pink);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block button:hover {
+  filter: brightness(1.08);
+}
+
+/*
+ * 页脚带：捐赠 / RSS / 订阅 / OST 四个 widget 合成一条低重量带。
+ *
+ * 这四个本来各自是一张 `.fwe-extras-block` 卡片——四张等权卡片等于宣布
+ * 「这是四段内容」，而按设计只有防伪警示和今日热门值得那个重量。所以带子
+ * 去掉卡片框、投影、圆角和面板填充，只留头顶一根细线；字号降到 0.72rem、
+ * 文字用 muted。这样它读起来是页脚 chrome，不是内容。
+ *
+ * 整块必须排在上方 `.fwe-extras-block` 基础规则之后：`.fwe-extras-strip__cell
+ * input:not(...)` 与基础规则里的同名选择器特异度完全相同（都是 (0,4,2)），
+ * 谁在后面谁赢。放在前面时基础的 `width: 100%` 会赢下来，把订阅按钮挤到
+ * 第二行——四格带在桌面就站不住了。
+ */
+html[data-fwe-mode='enhanced'] .fwe-extras-block--strip {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 1.25rem 1.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 1.1rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--fwe-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--fwe-muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell {
+  min-width: 0;
+}
+
+/* 带内标题降级：从衬线卡片标题变成小号 muted 大写标签 */
+html[data-fwe-mode='enhanced'] .fwe-extras-block--strip .fwe-extras-block__title {
+  margin: 0 0 0.35rem;
+  color: var(--fwe-muted);
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell p {
+  margin: 0 0 0.4rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell p:last-child {
+  margin-bottom: 0;
+}
+
+/* 订阅表单行内：input + button 同一行，否则四格带在桌面也站不住 */
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell form label {
+  display: none;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell input:not([type='submit'], [type='button']) {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell button {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+/*
+ * 嵌入的 OST 播放器：iframe 的 color-scheme 与被嵌入文档不一致时，画布会被
+ * 画成不透明底（w3c/csswg-drafts#4772）。YouTube 播放器的 theme 参数早已废弃
+ * 且恒为暗色，所以显式声明 light 两种情况都能看，同时不会冒出一块白底。
+ * 16/9 让它是个播放器而不是一条窄片——原先被 extras 网格的 16rem 自动填充
+ * 轨道挤成了 letterbox。
+ */
+html[data-fwe-mode='enhanced'] .fwe-extras-block iframe {
+  color-scheme: light;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell iframe {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+/*
+ * 窄屏：四格 → 两格 → 一格。每档都是确定的列数，不交给 auto-fill 猜——自动
+ * 填充轨道正是原先把 OST 挤成窄片的原因。
+ *
+ * 两个断点都按「一格还够不够用」算过，不是拍的：一格要同时容纳 input（≥80px）
+ * 和 nowrap 的 Subscribe 按钮（≈89px），加 0.4rem 间距约 175px，再算上 1.75rem
+ * 列间距与页面两侧 clamp(2rem, 5vw, 5rem) 留白（≤640px 时保底 32px）——
+ *   · 四列格宽 ≥175px 的起始视口是 826px，但 832px 时只剩 176px，贴着下限；
+ *     取 54rem，断点处仍有 184px，留了余量。
+ *   · 两列格宽 ≥175px 的起始视口是 410px；取 26rem，断点处 178px。
+ * 断点本身是包含边界（max-width 含等于），所以 straddle 测试必须写 864/863
+ * 与 416/415，见 test/e2e/layout.spec.ts。
+ */
+@media (max-width: 54rem) {
+  html[data-fwe-mode='enhanced'] .fwe-extras-block--strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 26rem) {
+  html[data-fwe-mode='enhanced'] .fwe-extras-block--strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/*
+ * OST 格：iframe 柱改成海报占位瓦片。
+ * 播放器的 src 已被脚本撤除（隐藏的 iframe 依然会连接，所以不能只靠
+ * display: none），点击瓦片才把原 src 写回、真正开始加载播放器。
+ */
+html[data-fwe-mode='enhanced'] .fwe-ost-pending {
+  display: none;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-ost-tile {
+  position: relative;
+  display: block;
+  width: 45%;
+  margin: 0 0 0.35rem;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--fwe-line);
+  border-radius: 4px;
+  background: var(--fwe-sunken);
+  line-height: 0;
+  cursor: pointer;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-ost-tile__poster {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-ost-tile__play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin: auto;
+  border-radius: 999px;
+  /* 播放钮压在缩略图上：两套主题都要白色，故不用令牌 */
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+}
+
+/* 瓦片把 <br> 的换行也让出来，OST 格才收得进一行多一点 */
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell--ost br {
+  display: none;
+}
+
+/* 热门宫格在页脚里改单行小块：不碰 popular 目录页的同名网格 */
+html[data-fwe-mode='enhanced'] .fwe-extras-block--wide .fwe-directory-grid {
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+html[data-fwe-mode='enhanced'] .fwe-extras-block--wide .fwe-directory-tile__title {
+  -webkit-line-clamp: 2;
+}
+
+/* 订阅说明段：input 的 placeholder 已说明用途，页脚里再念一遍是噪音 */
+html[data-fwe-mode='enhanced'] .fwe-extras-strip__cell #subscribe-text {
+  display: none;
+}
+
 html[data-fwe-mode='enhanced'] .fwe-directory-az .lcp_catlist {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
@@ -2150,7 +2872,7 @@ html[data-fwe-mode='enhanced'] .fwe-directory-az .lcp_catlist a {
   border: 1px solid var(--fwe-line);
   border-radius: 3px;
   color: var(--fwe-ink);
-  background: #faf8f4;
+  background: var(--fwe-wash);
   font-size: 0.78rem;
   font-weight: 680;
   line-height: 1.35;
@@ -2266,6 +2988,42 @@ html[data-fwe-mode='enhanced'] .fwe-search-fallback__link {
 
   html[data-fwe-mode='enhanced'] .fwe-card-actions {
     flex-wrap: wrap;
+  }
+}
+
+/*
+ * 窄卡片（≈448px 以下，主要为 390px 手机视口）下的标题微调：
+ * 网格分区已在所有宽度生效，这里只需覆盖主题在 max-width:400px 下
+ * 以更高特异性（0,3,0）强制设定的 15px 字号与 6px 下外边距。
+ */
+@container (max-width: 28rem) {
+  html[data-fwe-mode='enhanced'] .fwe-game-card > .entry-header > .entry-title,
+  html[data-fwe-mode='enhanced'] .fwe-detail > .entry-header > .entry-title {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  html[data-fwe-mode='enhanced'] .fwe-game-card > .entry-header > .fwe-article-meta,
+  html[data-fwe-mode='enhanced'] .fwe-detail > .entry-header > .fwe-article-meta {
+    row-gap: 0.3rem;
+  }
+}
+
+/*
+ * 主题 twentyfourteen-fg 在 `@media screen and (max-width: 400px)` 下用
+ * `.list-view .site-content .type-post .entry-content { display: none }`
+ * （特异性 0,4,0）把列表页正文整体藏掉；真实站点的首页/搜索/归档页都会带上
+ * body.list-view。增强模式把封面、规格、截图和操作按钮都搬进了 .entry-content，
+ * 因此必须用 !important 抢回显示，否则窄屏下卡片只剩标题行，
+ * Upcoming 区块也会塌成一张空白卡片。
+ */
+@media screen and (max-width: 400px) {
+  html[data-fwe-mode='enhanced'] .fwe-stream article .entry-content,
+  html[data-fwe-mode='enhanced'] .fwe-stream article .entry-summary,
+  html[data-fwe-mode='enhanced'] .fwe-upcoming .entry-content,
+  html[data-fwe-mode='enhanced'] .fwe-upcoming .entry-summary {
+    display: flex !important;
+    flex-direction: column;
   }
 }
 
@@ -2458,6 +3216,7 @@ html[data-fwe-mode='enhanced'] .fwe-search-fallback__link {
   html[data-fwe-mode='enhanced'] .fwe-media__chevron,
   html[data-fwe-mode='enhanced'] .fwe-disclosure__chevron,
   html[data-fwe-mode='enhanced'] .fwe-inline-disclosure__summary .fwe-icon,
+  html[data-fwe-mode='enhanced'] .fwe-skeleton__block,
   .fwe-rating-skeleton,
   .fwe-rating-popover,
   .fwe-back-to-top {
@@ -2498,12 +3257,12 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
   display: inline-block;
   width: 3.8rem;
   height: 1.25rem;
-  border-radius: 999px;
+  border-radius: 6px;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.04) 25%,
-    rgba(255, 255, 255, 0.1) 37%,
-    rgba(255, 255, 255, 0.04) 63%
+    var(--fwe-ghost) 25%,
+    var(--fwe-line) 37%,
+    var(--fwe-ghost) 63%
   );
   background-size: 400% 100%;
   animation: fwe-rating-shimmer 1.4s ease infinite;
@@ -2518,8 +3277,8 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
   align-items: center;
   gap: 0.35rem;
   cursor: pointer;
-  border-radius: 999px;
-  font-size: 0.72rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
   line-height: 1;
   user-select: none;
   transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2530,8 +3289,31 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
 }
 
 .fwe-rating-badge:focus-visible {
-  outline: 2px solid var(--fwe-pink, #ff168d);
+  outline: 2px solid var(--fwe-pink);
   outline-offset: 2px;
+}
+
+/*
+ * 药丸基态：底、边、圆角只在这里定义一次。状态类（loading / unmatched）
+ * 排在它之后，才不会被同特异度的简写覆盖（它们曾经因此全是死声明）。
+ */
+.fwe-rating-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 700;
+  background: var(--fwe-paper);
+  border: 1px solid color-mix(in srgb, var(--fwe-rating-tier, transparent) 32%, transparent);
+  white-space: nowrap;
+}
+
+.fwe-rating-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+  flex-shrink: 0;
 }
 
 .fwe-rating-badge--loading {
@@ -2539,9 +3321,9 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
 }
 
 .fwe-rating-pill--loading {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #94a3b8;
+  background: var(--fwe-ghost);
+  border: 1px solid var(--fwe-line);
+  color: var(--fwe-muted);
   font-size: 0.7rem;
   padding: 0.18rem 0.45rem;
 }
@@ -2568,18 +3350,18 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
 }
 
 .fwe-rating-pill--unmatched {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: #64748b;
+  background: var(--fwe-wash);
+  border: 1px solid var(--fwe-line);
+  color: var(--fwe-muted);
   font-size: 0.7rem;
   padding: 0.18rem 0.45rem;
   transition: all 0.2s ease;
 }
 
 .fwe-rating-badge--unmatched:hover .fwe-rating-pill--unmatched {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: #cbd5e1;
+  background: var(--fwe-elevate);
+  border: 1px solid var(--fwe-line);
+  color: var(--fwe-ink);
 }
 
 .fwe-rating-unmatched-text {
@@ -2592,138 +3374,81 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
   height: 0.78rem;
 }
 
-.fwe-rating-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.28rem;
-  padding: 0.18rem 0.48rem;
-  border-radius: 999px;
-  font-weight: 700;
-  border: 1px solid transparent;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  white-space: nowrap;
-}
-
-.fwe-rating-icon {
-  width: 0.85rem;
-  height: 0.85rem;
-  fill: currentColor;
-  flex-shrink: 0;
-}
-
-.fwe-rating-icon-meta {
-  width: 0.8rem;
-  height: 0.8rem;
-  stroke: currentColor;
-  flex-shrink: 0;
-}
-
-/* 评级色彩梯级 */
+/*
+ * 评级色彩梯级：颜色只声明一次，同时暴露成 --fwe-rating-tier，药丸的边与底
+ * 都从它取。percent 与 bar-fill 复用同一批类名，`color` 必须保留。
+ */
 .fwe-rating--overwhelming {
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--fwe-rating-overwhelming);
+  --fwe-rating-tier: var(--fwe-rating-overwhelming);
 }
 
 .fwe-rating--positive {
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.3);
+  color: var(--fwe-rating-positive);
+  --fwe-rating-tier: var(--fwe-rating-positive);
 }
 
 .fwe-rating--mixed {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.3);
+  color: var(--fwe-rating-mixed);
+  --fwe-rating-tier: var(--fwe-rating-mixed);
 }
 
 .fwe-rating--negative {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--fwe-rating-negative);
+  --fwe-rating-tier: var(--fwe-rating-negative);
 }
 
 .fwe-rating--meta-green {
-  color: #4ade80;
-  background: rgba(74, 222, 128, 0.12);
-  border-color: rgba(74, 222, 128, 0.3);
+  color: var(--fwe-meta-good);
+  background: color-mix(in srgb, var(--fwe-meta-good) 12%, transparent);
+  border-color: color-mix(in srgb, var(--fwe-meta-good) 30%, transparent);
 }
 
 .fwe-rating--meta-yellow {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.12);
-  border-color: rgba(251, 191, 36, 0.3);
+  color: var(--fwe-meta-warn);
+  background: color-mix(in srgb, var(--fwe-meta-warn) 12%, transparent);
+  border-color: color-mix(in srgb, var(--fwe-meta-warn) 30%, transparent);
 }
 
 .fwe-rating--meta-red {
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.12);
-  border-color: rgba(248, 113, 113, 0.3);
+  color: var(--fwe-meta-bad);
+  background: color-mix(in srgb, var(--fwe-meta-bad) 12%, transparent);
+  border-color: color-mix(in srgb, var(--fwe-meta-bad) 30%, transparent);
 }
 
-/* 粉红爪爪奖（Pink Paw Award）标志徽章 */
+/* 粉红爪爪奖（Pink Paw Award）：标题尾部的小标记，不再是独立徽章 */
 .fwe-paw-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.16rem 0.46rem;
-  border-radius: 999px;
-  background: rgba(255, 22, 141, 0.14);
-  border: 1px solid rgba(255, 22, 141, 0.32);
-  color: #ff6ec7;
-  font-size: 0.68rem;
+  margin-left: 0.3rem;
+  padding: 0;
+  color: var(--fwe-pink);
+  font-size: 0.62rem;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
   user-select: none;
-  box-shadow: 0 1px 4px rgba(255, 22, 141, 0.15);
-  transition:
-    transform 0.15s ease,
-    background 0.15s ease;
+  vertical-align: middle;
+  transition: color 0.15s ease;
 }
 
 .fwe-paw-badge:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 22, 141, 0.24);
-  border-color: rgba(255, 22, 141, 0.45);
-}
-
-/* 详情页评分条目 */
-.fwe-fact--rating .fwe-fact__value {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.fwe-fact--rating .fwe-fact-link {
-  color: inherit;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.fwe-fact--rating .fwe-fact-link:hover {
-  color: var(--fwe-pink, #ff168d);
+  color: #ff5fb2;
 }
 
 /* 评分悬浮气泡浮层 (Popover) */
 .fwe-rating-popover {
   position: absolute;
   z-index: 99999;
-  width: 290px;
+  width: 19.5rem;
   max-width: calc(100vw - 32px);
+  box-sizing: border-box;
   padding: 0.95rem;
   border-radius: 12px;
-  background: rgba(20, 24, 33, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow:
-    0 16px 36px rgba(0, 0, 0, 0.55),
-    0 4px 12px rgba(0, 0, 0, 0.3);
-  color: #f1f5f9;
+  background: var(--fwe-popover-bg);
+  border: 1px solid var(--fwe-popover-line);
+  box-shadow: var(--fwe-popover-shadow);
+  color: var(--fwe-ink);
   font-family: inherit;
   font-size: 0.8rem;
   pointer-events: auto;
@@ -2746,7 +3471,7 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
   gap: 0.5rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--fwe-line);
 }
 
 .fwe-rating-popover__header-right {
@@ -2760,7 +3485,7 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
   font-weight: 700;
   font-size: 0.88rem;
   line-height: 1.3;
-  color: #fff;
+  color: var(--fwe-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -2770,8 +3495,8 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
 
 .fwe-rating-popover__appid {
   font-size: 0.65rem;
-  color: #94a3b8;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--fwe-muted);
+  background: var(--fwe-ghost);
   padding: 0.12rem 0.4rem;
   border-radius: 4px;
   white-space: nowrap;
@@ -2785,18 +3510,18 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
   width: 1.35rem;
   height: 1.35rem;
   padding: 0;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--fwe-ghost);
+  border: 1px solid var(--fwe-line);
   border-radius: 4px;
-  color: #94a3b8;
+  color: var(--fwe-muted);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .fwe-rating-popover__refresh-btn:hover:not(:disabled) {
-  background: rgba(255, 22, 141, 0.2);
-  border-color: rgba(255, 22, 141, 0.4);
-  color: #fff;
+  background: var(--fwe-accent-wash);
+  border-color: var(--fwe-line);
+  color: var(--fwe-pink);
 }
 
 .fwe-rating-popover__refresh-btn:disabled {
@@ -2819,7 +3544,7 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
 
 .fwe-rating-popover__unmatched-text {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--fwe-muted);
   line-height: 1.45;
 }
 
@@ -2839,13 +3564,13 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
 .fwe-rating-popover__desc {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #cbd5e1;
+  color: var(--fwe-ink);
 }
 
 .fwe-rating-popover__bar {
   height: 5px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--fwe-sunken);
   overflow: hidden;
   margin-bottom: 0.45rem;
 }
@@ -2857,24 +3582,24 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
 }
 
 .fwe-rating-popover__bar-fill.fwe-rating--overwhelming {
-  background: #10b981;
+  background: var(--fwe-rating-overwhelming);
 }
 
 .fwe-rating-popover__bar-fill.fwe-rating--positive {
-  background: #38bdf8;
+  background: var(--fwe-rating-positive);
 }
 
 .fwe-rating-popover__bar-fill.fwe-rating--mixed {
-  background: #f59e0b;
+  background: var(--fwe-rating-mixed);
 }
 
 .fwe-rating-popover__bar-fill.fwe-rating--negative {
-  background: #ef4444;
+  background: var(--fwe-rating-negative);
 }
 
 .fwe-rating-popover__count {
   font-size: 0.7rem;
-  color: #94a3b8;
+  color: var(--fwe-muted);
   line-height: 1.35;
 }
 
@@ -2883,14 +3608,14 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
   align-items: center;
   justify-content: space-between;
   padding: 0.45rem 0.6rem;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--fwe-wash);
   border-radius: 6px;
   margin-bottom: 0.75rem;
 }
 
 .fwe-rating-popover__meta-label {
   font-size: 0.76rem;
-  color: #cbd5e1;
+  color: var(--fwe-ink);
   font-weight: 600;
 }
 
@@ -2911,9 +3636,9 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
   text-align: center;
   padding: 0.4rem 0.3rem;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--fwe-ghost);
   border: 1px solid transparent;
-  color: #e2e8f0;
+  color: var(--fwe-ink);
   font-size: 0.72rem;
   font-weight: 600;
   text-decoration: none;
@@ -2924,44 +3649,18 @@ html[data-fwe-show-ratings='false'] .fwe-rating-container {
 }
 
 .fwe-rating-popover__btn:hover {
-  background: rgba(255, 22, 141, 0.2);
-  color: #fff;
+  background: var(--fwe-accent-wash);
+  color: var(--fwe-pink);
 }
 
 .fwe-rating-popover__btn--primary {
-  background: rgba(255, 22, 141, 0.18) !important;
-  border-color: rgba(255, 22, 141, 0.35) !important;
-  color: #fff !important;
+  background: var(--fwe-pink) !important;
+  border-color: var(--fwe-pink) !important;
+  color: var(--fwe-on-accent) !important;
 }
 
 .fwe-rating-popover__btn--primary:hover:not(:disabled) {
-  background: var(--fwe-pink, #ff168d) !important;
-  color: #fff !important;
-}
-
-.fwe-fact-refresh-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.12rem 0.35rem;
-  margin-left: 0.25rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
-  color: #94a3b8;
-  cursor: pointer;
-  line-height: 1;
-  transition: all 0.15s ease;
-  vertical-align: middle;
-}
-
-.fwe-fact-refresh-btn:hover:not(:disabled) {
-  background: rgba(255, 22, 141, 0.2);
-  border-color: rgba(255, 22, 141, 0.4);
-  color: #fff;
-}
-
-.fwe-fact-refresh-icon {
-  width: 0.75rem;
-  height: 0.75rem;
+  background: var(--fwe-accent-hover) !important;
+  border-color: var(--fwe-accent-hover) !important;
+  color: var(--fwe-on-accent) !important;
 }

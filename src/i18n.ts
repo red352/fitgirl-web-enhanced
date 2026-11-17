@@ -12,7 +12,7 @@ export const STEAM_RATING_TRANSLATIONS: Record<string, string> = {
   'Overwhelmingly Negative': '差评如潮',
 };
 
-const translations = {
+export const translations = {
   en: {
     // Search
     searchPlaceholder: 'Search repacks…',
@@ -48,10 +48,19 @@ const translations = {
     languageAria: 'Switch interface language',
     langEn: 'English',
     langZh: '简体中文',
+    theme: 'Theme',
+    themeAria: 'Choose light, dark, or follow the system',
+    themeLight: 'Light',
+    themeDark: 'Dark',
+    themeSystem: 'System',
     upcomingDetails: 'View details & comments',
     upcomingDetailsAria: 'Open {title} details and comments',
     backToTop: 'Back to top',
     backToTopAria: 'Scroll back to the top of the page',
+    prevPost: 'Previous Post',
+    nextPost: 'Next Post',
+    ostPlayAria: 'Play soundtrack',
+    ostPlayTitle: 'Play soundtrack',
 
     // Lightbox
     lightboxAria: 'Screenshot and gameplay preview',
@@ -102,7 +111,6 @@ const translations = {
     steamDb: 'SteamDB',
     steamDbSearch: 'SteamDB Search',
     queryAgain: 'Query Again 🔄',
-    reviewCount: '{total} reviews',
     reviewsSummary: '{total} user reviews ({positive} positive / {negative} negative)',
     singleRatingAria: 'Steam: {percent}% ({scoreDesc} · {total} reviews)',
     cardRatingAria: '{name} Rating: Steam {percent}% {scoreDesc}',
@@ -111,6 +119,11 @@ const translations = {
     infiniteLoading: 'Loading more repacks...',
     infiniteEnd: 'All repacks loaded',
     infiniteRetry: 'Retry loading more',
+    infiniteErrorNetwork: 'Network error — check your connection and try again',
+    infiniteErrorHttp: 'Could not load more (HTTP {status})',
+    infiniteErrorEmpty: 'No more repacks to load',
+    infiniteLoadMore: 'Load more repacks',
+    infiniteLoaded: 'Loaded page {page}',
 
     // Relative Time
     timeToday: 'Today',
@@ -119,6 +132,11 @@ const translations = {
     timeWeeksAgo: '{weeks}w ago',
     timeMonthsAgo: '{months}mo ago',
     timeYearsAgo: '{years}y ago',
+    dateChipRecent: '{relative} · {absolute}',
+    factSizeMergedLabel: 'Original Size / Repack Size',
+    factSizeMerged: '{original} → {repack}',
+    cardKindNotice: 'Notice',
+    cardKindDigest: 'Digest',
   },
   'zh-CN': {
     // Search
@@ -155,10 +173,19 @@ const translations = {
     languageAria: '切换界面语言',
     langEn: 'English',
     langZh: '简体中文',
+    theme: '主题',
+    themeAria: '选择亮色、暗色或跟随系统',
+    themeLight: '亮色',
+    themeDark: '暗色',
+    themeSystem: '系统',
     upcomingDetails: '详情与评论',
     upcomingDetailsAria: '打开 {title} 的详情与评论',
     backToTop: '返回顶部',
     backToTopAria: '返回页面顶部',
+    prevPost: '上一篇',
+    nextPost: '下一篇',
+    ostPlayAria: '播放原声音乐',
+    ostPlayTitle: '播放原声音乐',
 
     // Lightbox
     lightboxAria: '截图与实机预览',
@@ -208,7 +235,6 @@ const translations = {
     steamDb: 'SteamDB',
     steamDbSearch: 'SteamDB 搜索',
     queryAgain: '重新查询 🔄',
-    reviewCount: '{total} 评测',
     reviewsSummary: '共 {total} 篇玩家评测（{positive} 好评 / {negative} 差评）',
     singleRatingAria: 'Steam: {percent}% ({scoreDesc} · {total} 评测)',
     cardRatingAria: '{name} 评分：Steam {percent}% {scoreDesc}',
@@ -217,6 +243,11 @@ const translations = {
     infiniteLoading: '正在加载更多 repacks...',
     infiniteEnd: '已加载全部条目',
     infiniteRetry: '重试加载',
+    infiniteErrorNetwork: '网络错误——请检查连接后重试',
+    infiniteErrorHttp: '加载失败（HTTP {status}）',
+    infiniteErrorEmpty: '没有更多内容了',
+    infiniteLoadMore: '加载更多 repacks',
+    infiniteLoaded: '已加载第 {page} 页',
 
     // Relative Time
     timeToday: '今天',
@@ -225,6 +256,11 @@ const translations = {
     timeWeeksAgo: '{weeks}周前',
     timeMonthsAgo: '{months}个月前',
     timeYearsAgo: '{years}年前',
+    dateChipRecent: '{relative} · {absolute}',
+    factSizeMergedLabel: '原始体积 / 打包后体积',
+    factSizeMerged: '{original} → {repack}',
+    cardKindNotice: '公告',
+    cardKindDigest: '摘要',
   },
 } as const;
 

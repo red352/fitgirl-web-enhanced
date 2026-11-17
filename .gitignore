@@ -6,3 +6,5 @@ dist/*
 test/e2e/layout.spec.ts-snapshots/
 test-results/
 playwright-report/
+
+.superpowers

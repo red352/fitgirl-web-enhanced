@@ -4,6 +4,7 @@ import {
   detectPageKind,
   DomTransaction,
   extractFacts,
+  formatRecentRelativeTime,
   formatRelativeTime,
   parseArchiveGroups,
   parseArticle,
@@ -39,7 +40,7 @@ describe('DOM Parsing', () => {
     expect(parsed.pageKind).toBe('single');
     expect(parsed.cover?.alt).toBe('Sample Game cover');
     expect(parsed.sections.get('downloads')?.nodes).toHaveLength(4);
-    expect(parsed.media).toHaveLength(4);
+    expect(parsed.media).toHaveLength(6);
     expect(parsed.media.at(-1)?.video).toBeInstanceOf(HTMLVideoElement);
   });
 
@@ -75,7 +76,7 @@ describe('DOM Parsing', () => {
     const parsed = parseArticle(document.querySelector('article') as HTMLElement, 'listing');
     expect(parsed.kind).toBe('game');
     expect(parsed.entry?.classList.contains('entry-summary')).toBe(true);
-    expect(parsed.media).toHaveLength(4);
+    expect(parsed.media).toHaveLength(6);
   });
 
   it('parses compressed single-line fact fields in search excerpts', () => {
@@ -174,6 +175,49 @@ describe('State and Restoration', () => {
     expect(generated.isConnected).toBe(false);
   });
 
+  it('restores a removed attribute at its original position in the attribute list', () => {
+    mount(
+      '<iframe id="frame" src="https://example.test/embed" allowfullscreen width="90%"></iframe>',
+    );
+    const frame = document.querySelector('#frame') as HTMLIFrameElement;
+    const original = frame.outerHTML;
+    const transaction = new DomTransaction();
+    transaction.setAttribute(frame, 'src', null);
+    expect(frame.hasAttribute('src')).toBe(false);
+    transaction.restore();
+    expect(frame.outerHTML).toBe(original);
+  });
+
+  it('restores children replaced through setChildren, even when they also carry move records', () => {
+    mount('<div id="source"><i id="a"></i><i id="b"></i></div><div id="target"></div>');
+    const source = document.querySelector('#source') as HTMLElement;
+    const target = document.querySelector('#target') as HTMLElement;
+    const a = document.querySelector('#a') as HTMLElement;
+    const b = document.querySelector('#b') as HTMLElement;
+    const transaction = new DomTransaction();
+    // The node being replaced is also relocated, so both record types must agree
+    // about where it ends up.
+    transaction.move(a, target);
+    transaction.setChildren(source, [b, document.createElement('u')]);
+    expect([...source.children].map((item) => item.tagName)).toEqual(['I', 'U']);
+    transaction.restore();
+    expect([...source.children].map((item) => item.id ?? item.tagName)).toEqual(['a', 'b']);
+    expect(a.parentElement).toBe(source);
+  });
+
+  it('restores children replaced through setChildren when the parent itself was moved', () => {
+    mount('<div id="wrap"><div id="nav"><i id="x"></i></div></div><div id="elsewhere"></div>');
+    const wrap = document.querySelector('#wrap') as HTMLElement;
+    const nav = document.querySelector('#nav') as HTMLElement;
+    const elsewhere = document.querySelector('#elsewhere') as HTMLElement;
+    const transaction = new DomTransaction();
+    transaction.move(nav, elsewhere);
+    transaction.setChildren(nav, [document.createElement('em')]);
+    transaction.restore();
+    expect(nav.parentElement).toBe(wrap);
+    expect([...nav.children].map((item) => item.tagName)).toEqual(['I']);
+  });
+
   it('accurately parses FitGirl European date formats and nested time elements', () => {
     // 1. span.entry-date with nested time[datetime]
     mount(
@@ -228,5 +272,23 @@ describe('State and Restoration', () => {
     const sixMonthsAgo = new Date('2026-03-03T10:00:00Z');
     expect(formatRelativeTime(sixMonthsAgo, fixedNow, 'en')).toBe('6mo ago');
     expect(formatRelativeTime(sixMonthsAgo, fixedNow, 'zh-CN')).toBe('6个月前');
+  });
+
+  it('drops the relative time once a post is older than the recent window', () => {
+    const now = new Date('2026-11-17T12:00:00Z');
+
+    // Inside the window the relative wording is kept…
+    expect(formatRecentRelativeTime(new Date('2026-11-17T09:00:00Z'), now, 'en')).toBe('Today');
+    expect(formatRecentRelativeTime(new Date('2026-11-16T09:00:00Z'), now, 'en')).toBe('Yesterday');
+    expect(formatRecentRelativeTime(new Date('2026-11-14T09:00:00Z'), now, 'en')).toBe('3d ago');
+    expect(formatRecentRelativeTime(new Date('2026-11-14T09:00:00Z'), now, 'zh-CN')).toBe('3天前');
+
+    // …and past it the chip falls back to the absolute date alone.
+    expect(formatRecentRelativeTime(new Date('2026-11-10T09:00:00Z'), now, 'en')).toBe('');
+    expect(formatRecentRelativeTime(new Date('2026-11-10T09:00:00Z'), now, 'zh-CN')).toBe('');
+    expect(formatRecentRelativeTime(new Date('2026-09-02T10:00:00Z'), now, 'en')).toBe('');
+
+    // Unparseable input stays silent rather than inventing a wording.
+    expect(formatRecentRelativeTime('not a date', now, 'en')).toBe('');
   });
 });

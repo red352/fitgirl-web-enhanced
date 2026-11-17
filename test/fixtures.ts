@@ -1,8 +1,9 @@
 export const gameArticle = `
-<article class="hentry">
+<article class="post-83718 post type-post status-publish format-standard hentry category-lossless-repack">
   <header class="entry-header">
+    <div class="entry-meta"><span class="cat-links"><a href="/category/lossless-repack/" rel="category tag">Lossless Repack</a>, <a href="/category/pink-paw-award/" rel="category tag">Pink Paw Award</a></span></div>
     <h1 class="entry-title"><a href="/sample-game/">Sample Game: Deluxe Edition</a></h1>
-    <div class="entry-meta"><time class="entry-date">September 2, 2026</time></div>
+    <div class="entry-meta"><span class="entry-date"><a href="/sample-game/" rel="bookmark"><time class="entry-date" datetime="2026-09-02T10:00:00+00:00">September 2, 2026</time></a></span> <span class="byline"><span class="author vcard"><a class="url fn n" href="/author/fitgirl/" rel="author">FitGirl</a></span></span> <span class="comments-link"><a href="/sample-game/#respond"><span class="tolstoycomments-cc" data-url="https://fitgirl-repacks.site/sample-game/"><i class="fa fa-comment"></i> 37 comments</span></a></span></div>
   </header>
   <div class="entry-content">
     <h3>Sample Game: Deluxe Edition</h3>
@@ -23,6 +24,8 @@ export const gameArticle = `
       <a href="https://images.example/one-large.jpg"><img src="https://images.example/one.jpg" alt="Gameplay one"></a>
       <a href="https://images.example/two-large.jpg"><img src="https://images.example/two.jpg" alt="Gameplay two"></a>
       <a href="https://images.example/three-large.jpg"><img src="https://images.example/three.jpg" alt="Gameplay three"></a>
+      <a href="https://images.example/four-large.jpg"><img src="https://images.example/four.jpg" alt="Gameplay four"></a>
+      <a href="https://images.example/five-large.jpg"><img src="https://images.example/five.jpg" alt="Gameplay five"></a>
       <br>
       <a href="https://video.example/preview.mp4"><video muted loop autoplay><source src="https://video.example/preview.mp4"></video></a>
     </p>
@@ -33,13 +36,13 @@ export const gameArticle = `
 </article>`;
 
 export const specialArticle = `
-<article class="hentry">
+<article class="post-83697 post type-post status-publish format-standard hentry category-updates-digest">
   <header class="entry-header"><h2 class="entry-title"><a href="/updates-digest/">Updates Digest</a></h2></header>
   <div class="entry-content"><p>This content must remain intact.</p></div>
 </article>`;
 
 export const upcomingArticle = `
-<article class="hentry">
+<article class="post-68049 post type-post status-publish format-standard hentry category-uncategorized">
   <header class="entry-header"><h2 class="entry-title"><a href="/upcoming-repacks/">Upcoming Repacks</a></h2></header>
   <div class="entry-content">
     .wplp_outside { border: 1px solid red; }<br>-->
@@ -128,8 +131,9 @@ export const siteHeader = `
 export const pinkPawGameArticle = `
 <article class="post-63640 post type-post status-publish format-standard hentry category-lossless-repack category-pink-paw-award">
   <header class="entry-header">
+    <div class="entry-meta"><span class="cat-links"><a href="/category/lossless-repack/" rel="category tag">Lossless Repack</a></span></div>
     <h1 class="entry-title"><a href="/the-alters/">The Alters: Deluxe Edition</a></h1>
-    <div class="entry-meta"><time class="entry-date">September 2, 2026</time></div>
+    <div class="entry-meta"><span class="entry-date"><a href="/the-alters/" rel="bookmark"><time class="entry-date" datetime="2026-09-02T10:00:00+00:00">September 2, 2026</time></a></span> <span class="byline"><span class="author vcard"><a class="url fn n" href="/author/fitgirl/" rel="author">FitGirl</a></span></span> <span class="comments-link"><a href="/the-alters/#respond"><span class="tolstoycomments-cc" data-url="https://fitgirl-repacks.site/the-alters/"><i class="fa fa-comment"></i> 12 comments</span></a></span></div>
   </header>
   <div class="entry-content">
     <div style="background: url(https://fitgirl-repacks.site/wp-content/uploads/2022/08/paw.png) top right no-repeat">
@@ -160,6 +164,107 @@ export const pinkPawGameArticle = `
   </div>
 </article>`;
 
+export const siteSidebarExtras = `
+<aside id="secondary" class="sidebar-primary">
+  <h2 class="site-description">The ONLY official site for FitGirl Repacks. Every single FG repack installer has a link inside, which leads here. Do not fall for fake and scam sites, which are using my name.</h2>
+  <div id="primary-sidebar">
+    <aside id="custom_html-5" class="widget_text widget widget_custom_html">
+      <h1 class="widget-title">Support the Cause</h1>
+      <div class="textwidget custom-html-widget"><p>Running this site takes time and bandwidth. If my repacks helped you, consider supporting the cause.</p></div>
+    </aside>
+    <aside id="custom_html-2" class="widget_text widget widget_custom_html">
+      <h1 class="widget-title">My RSS Feed</h1>
+      <div class="textwidget custom-html-widget"><p>Subscribe to this RSS feed and get the latest updates automatically: <a href="/feed/">FitGirl RSS Feed</a></p></div>
+    </aside>
+    <aside id="blog_subscription-2" class="widget widget_blog_subscription jetpack_subscription_widget">
+      <h1 class="widget-title">Subscribe to my releases via Email</h1>
+      <div class="wp-block-jetpack-subscriptions__container">
+        <form class="jetpack_subscription_widget" action="/subscribe/" method="post">
+          <label for="subscribe-field-3">Email address</label>
+          <div id="subscribe-text"><p>Enter your email address to subscribe to this blog and receive notifications of new posts by email.</p></div>
+          <input id="subscribe-field-3" type="email" name="email" placeholder="your@email.com" required>
+          <button type="submit">Subscribe</button>
+        </form>
+      </div>
+    </aside>
+    ${archiveWidget}
+    <aside id="custom_html-4" class="widget_text widget widget_custom_html">
+      <h1 class="widget-title">Press Play for my OST</h1>
+      <div class="textwidget custom-html-widget"><p><iframe src="https://www.youtube.com/embed/72QAAOaYW2M" allowfullscreen width="90%" frameborder="0"></iframe><br> <br> or original version for Japanese games<br> <br><iframe src="https://www.youtube.com/embed/IFzUTKsrbN8" allowfullscreen width="90%" frameborder="0"></iframe></p></div>
+    </aside>
+  </div>
+</aside>`;
+
+export const siteFooterExtras = `
+<footer id="colophon" class="site-footer"><div id="supplementary"><div id="footer-sidebar" class="footer-sidebar">
+  <aside id="block-6" class="widget widget_block">
+    <style>.footer-grid .widget-grid-view-image { float: left; max-width: 17%; margin-right: 5px; }</style>
+    <div class="footer-grid"><div class="jetpack_top_posts_widget">
+      <h2 class="widgettitle">Today’s Most Popular Repacks</h2>
+      <div class="widgets-grid-layout no-grav">${Array.from(
+        { length: 10 },
+        (_, index) =>
+          `<div class="widget-grid-view-image"><a href="/today-popular-${index + 1}/" title="Today Popular Game ${index + 1}" class="bump-view" data-bump-view="tp"><img decoding="async" loading="lazy" width="150" height="200" src="/test/e2e/assets/shot-${(index % 3) + 1}.svg" alt="Today Popular Game ${index + 1}"></a></div>`,
+      ).join('')}</div>
+    </div></div>
+  </aside>
+</div></div><div class="site-info">Proudly powered by WordPress</div></footer>`;
+
+export const postNavigation = `
+<nav class="navigation post-navigation"><h1 class="screen-reader-text">Post navigation</h1><div class="nav-links"><a href="/previous-game/" rel="prev"><span class="meta-nav">Previous Post</span>Previous Game: Complete Edition</a><a href="/next-game/" rel="next"><span class="meta-nav">Next Post</span>Next Game: Definitive Edition</a></div></nav>`;
+
+/** 详情页评论区：Tolstoy 插件挂载点（线上位于 post-navigation 之后） */
+export const commentsSection = `
+<div data-source-theme="tolstoycomments"><div id="comments"></div></div>
+<div class="tolstoycomments-feed"></div>`;
+
+const makeArchiveArticle = (index: number): string =>
+  gameArticle
+    .replaceAll('Sample Game', `Archive Game ${index}`)
+    .replace('class="post-83718', `id="post-8510${index}" class="post-8510${index}`);
+
+const archiveNav = (nextHref: string): string =>
+  `<nav class="navigation paging-navigation"><h1 class="screen-reader-text">Posts navigation</h1><div class="nav-links">${
+    nextHref
+      ? `<a href="${nextHref}" class="next" rel="next"><span class="meta-nav">Next</span></a>`
+      : ''
+  }</div></nav>`;
+
+/** 归档列表页的 `#content` 内容：两篇游戏卡 + 指向 /page/2/ 的分页导航 */
+export const archiveListingContent = `${makeArchiveArticle(1)}${makeArchiveArticle(2)}${archiveNav('/page/2/')}`;
+
+/** 第 2 页的 `#content` 内容：另外两篇游戏卡 + 指向 /page/3/ 的分页导航 */
+export const archiveListingPage2Content = `${makeArchiveArticle(3)}${makeArchiveArticle(4)}${archiveNav('/page/3/')}`;
+
+/** 归档列表页：两篇游戏卡 + 指向 /page/2/ 的分页导航 */
+export const archiveListingPage = `
+${siteHeader}
+<div id="page"><main id="main"><div id="primary"><div id="content" class="site-content">${archiveListingContent}</div></div>${siteSidebarExtras}</main>${siteFooterExtras}</div>`;
+
+/** 第 2 页：另外两篇游戏卡 + 指向 /page/3/ 的分页导航（用于验证导航被更新） */
+export const archiveListingPage2 = `
+<div id="page"><main id="main"><div id="primary"><div id="content" class="site-content">${archiveListingPage2Content}</div></div></main></div>`;
+
+/** 带粉爪嘉奖的游戏卡列表页，用于验证卡片头部层级 */
+export const pinkPawStreamPage = `
+${siteHeader}
+<div id="page"><main id="main"><div id="primary"><div id="content" class="site-content">${pinkPawGameArticle}</div></div>${siteSidebarExtras}</main>${siteFooterExtras}</div>`;
+
+/** 把 fixture 里的日期改写为「今天」，用于验证相对时间分支 */
+export const withTodayDate = (html: string): string => {
+  const now = new Date();
+  const iso = now.toISOString().slice(0, 19) + '+00:00';
+  const absolute = now.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+  return html
+    .replace('datetime="2026-09-02T10:00:00+00:00"', `datetime="${iso}"`)
+    .replace('September 2, 2026', absolute);
+};
+
 export const fullPage = `
 ${siteHeader}
-<div id="page"><main id="main"><div id="primary"><div id="content">${upcomingArticle}${gameArticle}${gameArticle.replaceAll('Sample Game', 'Second Game')}${specialArticle}</div></div></main>${popularWidget}${archiveWidget}</div>`;
+<div id="page"><main id="main"><div id="primary"><div id="content" class="site-content">${upcomingArticle}${gameArticle}${gameArticle.replaceAll('Sample Game', 'Second Game')}${specialArticle}</div></div>${siteSidebarExtras}</main>${popularWidget}${siteFooterExtras}</div>`;

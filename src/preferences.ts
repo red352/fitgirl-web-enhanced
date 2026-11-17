@@ -6,19 +6,25 @@ import type {
   StoredLayoutPreference,
   StoredMediaPreference,
   StoredShowRatingsPreference,
+  StoredThemePreference,
   SupportedLanguage,
+  ThemeMode,
 } from './types';
 
 export const MEDIA_EXPAND_STORAGE_KEY = 'fitgirl-web-enhanced:v1:media-expand';
 export const INFINITE_SCROLL_STORAGE_KEY = 'fitgirl-web-enhanced:v1:infinite-scroll';
 export const SHOW_RATINGS_STORAGE_KEY = 'fitgirl-web-enhanced:v1:show-ratings';
 export const LANGUAGE_STORAGE_KEY = 'fitgirl-web-enhanced:v1:language';
+export const THEME_STORAGE_KEY = 'fitgirl-web-enhanced:v1:theme';
 
 const TIMESTAMP_KEY = `${STORAGE_KEY}:updated-at`;
 const MEDIA_TIMESTAMP_KEY = `${MEDIA_EXPAND_STORAGE_KEY}:updated-at`;
 const INFINITE_SCROLL_TIMESTAMP_KEY = `${INFINITE_SCROLL_STORAGE_KEY}:updated-at`;
 const SHOW_RATINGS_TIMESTAMP_KEY = `${SHOW_RATINGS_STORAGE_KEY}:updated-at`;
 const LANGUAGE_TIMESTAMP_KEY = `${LANGUAGE_STORAGE_KEY}:updated-at`;
+const THEME_TIMESTAMP_KEY = `${THEME_STORAGE_KEY}:updated-at`;
+
+export const DEFAULT_THEME: ThemeMode = 'system';
 
 const DATABASE_NAME = 'fitgirl-web-enhanced';
 const STORE_NAME = 'preferences';
@@ -76,6 +82,18 @@ function asLanguagePreference(
   const timestamp = Number(updatedAt);
   return {
     language,
+    updatedAt: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0,
+  };
+}
+
+function asThemePreference(
+  theme: string | null,
+  updatedAt: string | null,
+): StoredThemePreference | null {
+  if (theme !== 'light' && theme !== 'dark' && theme !== 'system') return null;
+  const timestamp = Number(updatedAt);
+  return {
+    theme,
     updatedAt: Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0,
   };
 }
@@ -175,6 +193,26 @@ function writeLocalLanguage(value: StoredLanguagePreference): void {
   try {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, value.language);
     window.localStorage.setItem(LANGUAGE_TIMESTAMP_KEY, String(value.updatedAt));
+  } catch {
+    // When same-origin storage is disabled, IndexedDB still acts as a fallback.
+  }
+}
+
+function readLocalTheme(): StoredThemePreference | null {
+  try {
+    return asThemePreference(
+      window.localStorage.getItem(THEME_STORAGE_KEY),
+      window.localStorage.getItem(THEME_TIMESTAMP_KEY),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalTheme(value: StoredThemePreference): void {
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, value.theme);
+    window.localStorage.setItem(THEME_TIMESTAMP_KEY, String(value.updatedAt));
   } catch {
     // When same-origin storage is disabled, IndexedDB still acts as a fallback.
   }
@@ -474,7 +512,7 @@ export function getFastStoredLayoutMode(): LayoutMode {
 
 export function getFastStoredMediaExpand(): boolean {
   const local = readLocalMedia();
-  return local ? local.expanded : true;
+  return local ? local.expanded : false;
 }
 
 export function getFastStoredInfiniteScroll(): boolean {
@@ -517,7 +555,7 @@ export async function readStoredMediaExpand(): Promise<boolean> {
   const selected = [local, indexed]
     .filter((value): value is StoredMediaPreference => value !== null)
     .sort((left, right) => right.updatedAt - left.updatedAt)[0];
-  if (!selected) return true;
+  if (!selected) return false;
   if (!local || local.expanded !== selected.expanded || local.updatedAt !== selected.updatedAt)
     writeLocalMedia(selected);
   return selected.expanded;
@@ -587,4 +625,84 @@ export async function writeStoredLanguage(language: SupportedLanguage): Promise<
   const value = { language, updatedAt: Date.now() } satisfies StoredLanguagePreference;
   writeLocalLanguage(value);
   await writeIndexedLanguage(value);
+}
+
+async function readIndexedTheme(): Promise<StoredThemePreference | null> {
+  const database = await openDatabase();
+  if (!database) return null;
+  return new Promise((resolve) => {
+    try {
+      const transaction = database.transaction(STORE_NAME, 'readonly');
+      const request = transaction.objectStore(STORE_NAME).get(THEME_STORAGE_KEY);
+      request.onsuccess = () => {
+        const value = request.result as Partial<StoredThemePreference> | undefined;
+        database.close();
+        resolve(
+          value &&
+            (value.theme === 'light' || value.theme === 'dark' || value.theme === 'system') &&
+            Number.isFinite(value.updatedAt)
+            ? { theme: value.theme, updatedAt: value.updatedAt ?? 0 }
+            : null,
+        );
+      };
+      request.onerror = () => {
+        database.close();
+        resolve(null);
+      };
+    } catch {
+      database.close();
+      resolve(null);
+    }
+  });
+}
+
+async function writeIndexedTheme(value: StoredThemePreference): Promise<void> {
+  const database = await openDatabase();
+  if (!database) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const transaction = database.transaction(STORE_NAME, 'readwrite');
+      transaction.objectStore(STORE_NAME).put(value, THEME_STORAGE_KEY);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onabort = () => {
+        database.close();
+        resolve();
+      };
+    } catch {
+      database.close();
+      resolve();
+    }
+  });
+}
+
+export function getFastStoredTheme(): ThemeMode {
+  const local = readLocalTheme();
+  return local ? local.theme : DEFAULT_THEME;
+}
+
+export async function readStoredTheme(): Promise<ThemeMode> {
+  const [local, indexed] = await Promise.all([
+    Promise.resolve(readLocalTheme()),
+    readIndexedTheme(),
+  ]);
+  const selected = [local, indexed]
+    .filter((value): value is StoredThemePreference => value !== null)
+    .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+  if (!selected) return DEFAULT_THEME;
+  if (!local || local.theme !== selected.theme || local.updatedAt !== selected.updatedAt)
+    writeLocalTheme(selected);
+  return selected.theme;
+}
+
+export async function writeStoredTheme(theme: ThemeMode): Promise<void> {
+  const value = { theme, updatedAt: Date.now() } satisfies StoredThemePreference;
+  writeLocalTheme(value);
+  await writeIndexedTheme(value);
 }

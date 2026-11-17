@@ -129,6 +129,12 @@ FitGirl Repacks 原版页面基于经典博客流式布局，在现代高分辨�
 - 基于 `@run-at: document-start` 注入与同步 Fast-Path 状态预检，在 DOM 解析初期即注入视图控制属性，彻底消除无样式内容闪烁（FOUC）。
 - 偏好设置采用 `localStorage` 与 `IndexedDB` 双层容错存储，跨会话与多标签页保持同步。
 
+### 9. 亮色 / 暗色 / 系统主题
+
+- 顶部 **View** 菜单提供 **主题** 选择器，可选 `亮色`、`暗色`、`系统`（跟随操作系统）。
+- 所有颜色由 CSS 自定义属性驱动，卡片、弹窗与控件随主题整体切换，文字始终清晰可读。
+- 当前主题通过命名空间存储跨会话保留，并在首次绘制前应用，避免短暂闪出错误主题。
+
 ---
 
 ## 界面预览
@@ -229,7 +235,13 @@ src/
 ├── icons.ts        # 内联 SVG 图标生成器
 ├── style.css       # 媒体查询、容器查询与基于作用域隔离的样式定义
 └── main.ts         # 生命周期初始化入口与运行时沙箱引导
+scripts/
+├── capture-assets.mjs    # 无头截取文档预览图
+├── bump-version.mjs      # 单一来源版本升级与发布工具
+└── escape-non-ascii.ts   # 将源码中的非 ASCII 文本转义，产出纯 ASCII 脚本
 ```
+
+下方文件树与存储键为摘要；权威定义以上述源码文件为准。
 
 - **双向事务记录器（Reversible Transactions）**：
   增强脚本对页面的结构调整并非破坏性修改，而是通过事务记录器捕获节点的原始父级容器、兄弟节点相对位置、行内样式与原始 Class。当切换至 `Original View` 时，事务以逆序精确执行还原，保证与原生页面 100% 一致。
@@ -249,12 +261,10 @@ src/
 - **零隐私追踪与只读请求**：
   - Steam 评分拉取完全基于官方公开只读 API，不携带任何用户 Token、Cookie、账号凭据或个人隐私；
   - 脚本不包含任何统计埋点、探针或第三方数据分析服务，绝不收集或上传用户的任何浏览历史与访问数据。
-- **本地存储隔离与命名空间**：本地配置与缓存保存在站点同源存储或 GM 存储中，键名规范如下：
-  - `fitgirl-web-enhanced:v1:layout-mode`：视图模式配置（`enhanced` / `original`）；
-  - `fitgirl-web-enhanced:v1:media-expand`：详情页媒体默认展开偏好；
-  - `fitgirl-web-enhanced:v1:infinite-scroll`：列表页无限滚动开关状态；
-  - `fitgirl-web-enhanced:v1:show-ratings`：游戏评分展示开关状态；
-  - `fitgirl-web-enhanced:ratings:v1`：Steam 评分与评测本地缓存字典（7 天有效期自动淘汰）。
+- **本地存储隔离与命名空间**：本地配置与缓存使用统一前缀。权威键名常量导出自 `src/dom.ts`、`src/preferences.ts`、`src/rating.ts` 与 `src/ui.ts`，分为以下几类：
+  - 视图模式、媒体展开、无限滚动、评分显示、语言与主题偏好；
+  - 以 `infinite-pages:` 为前缀、按列表页区分的滚动位置；
+  - 以 `rating:` 为前缀的 Steam 评分本地缓存（命中 7 天、未命中 3 天有效期）。
 
 ---
 
@@ -299,7 +309,7 @@ npm run test
 npm run build
 
 # 一键统一升级版本（同步 package.json、package-lock.json、README 徽章并重新编译产物）
-npm run bump patch   # 或 minor, major, 1.5.0
+npm run bump patch   # 或 minor, major, x.y.z
 
 # 执行 Playwright 端到端及视觉快照测试
 npm run test:e2e

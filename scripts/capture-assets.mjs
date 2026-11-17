@@ -143,7 +143,8 @@ await page.setViewportSize({ width: 1440, height: 900 });
 await page.goto('http://127.0.0.1:4178/test/e2e/');
 await page.waitForSelector('.fwe-rating-badge');
 await disableAnimations();
-await page.hover('.fwe-rating-badge');
+// T4 起弹层是点击展开（hover 只保留焦点/悬停提示，不再开面板）。
+await page.click('.fwe-rating-badge');
 await page.waitForSelector('.fwe-rating-popover[aria-hidden="false"]');
 await page.screenshot({
   path: resolve(assetsDir, 'rating-popover.png'),
@@ -156,7 +157,8 @@ console.log('Capturing detail-desktop.png...');
 await page.setViewportSize({ width: 1440, height: 1000 });
 await page.goto('http://127.0.0.1:4178/test/e2e/?page=single');
 await page.waitForSelector('.fwe-detail');
-await page.waitForSelector('.fwe-fact--rating');
+// T4 起评分只活在标题行的徽章里，facts 行不再有评分槽位。
+await page.waitForSelector('.fwe-detail .fwe-rating-badge');
 await disableAnimations();
 await page.screenshot({
   path: resolve(assetsDir, 'detail-desktop.png'),

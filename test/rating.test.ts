@@ -552,5 +552,147 @@ describe('Rating Engine', () => {
 
       popover.destroy();
     });
+
+    it('右对齐锚点右侧，而不是居中后被视口右缘钳住', () => {
+      setActiveLanguage('en');
+      const popover = new RatingPopover();
+      const anchor = document.createElement('div');
+      document.body.append(anchor);
+      anchor.getBoundingClientRect = () =>
+        ({ right: 1383, left: 1304, top: 160, bottom: 181, width: 79, height: 21 }) as DOMRect;
+      const popoverEl = document.querySelector('.fwe-rating-popover') as HTMLElement;
+      popoverEl.getBoundingClientRect = () =>
+        ({ right: 322, left: 0, top: 0, bottom: 187, width: 322, height: 187 }) as DOMRect;
+      vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1440);
+
+      const sampleData: GameRatingData = {
+        appId: 1245620,
+        name: 'ELDEN RING',
+        positivePercent: 93,
+        scoreDesc: 'Very Positive',
+        totalReviews: 1150000,
+        totalPositive: 1070000,
+        totalNegative: 80000,
+        metascore: 94,
+        steamUrl: 'https://store.steampowered.com/app/1245620/',
+        steamDbUrl: 'https://steamdb.info/app/1245620/',
+        metacriticUrl: 'https://www.metacritic.com/game/elden-ring/',
+      };
+
+      popover.show(anchor, sampleData);
+      expect(popoverEl.style.left).toBe('1061px'); // 1383 - 322
+
+      // 贴右边时钳在 innerWidth - 322 - 16
+      anchor.getBoundingClientRect = () =>
+        ({ right: 1910, left: 1831, top: 160, bottom: 181, width: 79, height: 21 }) as DOMRect;
+      vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1920);
+      popover.show(anchor, sampleData);
+      expect(popoverEl.style.left).toBe('1582px');
+      popover.destroy();
+      vi.restoreAllMocks();
+    });
+
+    it('Escape 与点击外部都能关掉弹层', () => {
+      setActiveLanguage('en');
+      const popover = new RatingPopover();
+      const anchor = document.createElement('div');
+      document.body.append(anchor);
+      const sampleData: GameRatingData = {
+        appId: 1245620,
+        name: 'ELDEN RING',
+        positivePercent: 93,
+        scoreDesc: 'Very Positive',
+        totalReviews: 1150000,
+        totalPositive: 1070000,
+        totalNegative: 80000,
+        metascore: 94,
+        steamUrl: 'https://store.steampowered.com/app/1245620/',
+        steamDbUrl: 'https://steamdb.info/app/1245620/',
+        metacriticUrl: 'https://www.metacritic.com/game/elden-ring/',
+      };
+
+      popover.show(anchor, sampleData);
+      const popoverEl = document.querySelector('.fwe-rating-popover') as HTMLElement;
+      expect(popoverEl.classList.contains('fwe-rating-popover--visible')).toBe(true);
+
+      // Escape 关闭时把锚点的 aria-expanded 复位
+      anchor.setAttribute('aria-expanded', 'true');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(popoverEl.classList.contains('fwe-rating-popover--visible')).toBe(false);
+      expect(anchor.getAttribute('aria-expanded')).toBe('false');
+
+      anchor.setAttribute('aria-expanded', 'true');
+      popover.show(anchor, sampleData);
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      expect(popoverEl.classList.contains('fwe-rating-popover--visible')).toBe(false);
+      expect(anchor.getAttribute('aria-expanded')).toBe('false');
+
+      // 点在弹层自己身上不关
+      popover.show(anchor, sampleData);
+      popoverEl.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      expect(popoverEl.classList.contains('fwe-rating-popover--visible')).toBe(true);
+      popover.destroy();
+    });
+
+    it('切换锚点时复位旧徽章的 aria-expanded', () => {
+      setActiveLanguage('en');
+      const popover = new RatingPopover();
+      const firstAnchor = document.createElement('div');
+      const secondAnchor = document.createElement('div');
+      document.body.append(firstAnchor, secondAnchor);
+      const sampleData: GameRatingData = {
+        appId: 1245620,
+        name: 'ELDEN RING',
+        positivePercent: 93,
+        scoreDesc: 'Very Positive',
+        totalReviews: 1150000,
+        totalPositive: 1070000,
+        totalNegative: 80000,
+        metascore: 94,
+        steamUrl: 'https://store.steampowered.com/app/1245620/',
+        steamDbUrl: 'https://steamdb.info/app/1245620/',
+        metacriticUrl: 'https://www.metacritic.com/game/elden-ring/',
+      };
+
+      // 键盘 Tab 到另一枚徽章后按 Enter 不会产生 pointerdown，只能靠 show() 复位旧锚点
+      firstAnchor.setAttribute('aria-expanded', 'true');
+      popover.show(firstAnchor, sampleData);
+      secondAnchor.setAttribute('aria-expanded', 'true');
+      popover.show(secondAnchor, sampleData);
+      expect(firstAnchor.getAttribute('aria-expanded')).toBe('false');
+      expect(secondAnchor.getAttribute('aria-expanded')).toBe('true');
+
+      // 未匹配视图走 showFallback，同样要复位
+      firstAnchor.setAttribute('aria-expanded', 'true');
+      popover.showUnmatched(firstAnchor, 'ELDEN RING');
+      expect(secondAnchor.getAttribute('aria-expanded')).toBe('false');
+      popover.destroy();
+    });
+
+    it('滚动时不再隐藏弹层', () => {
+      setActiveLanguage('en');
+      const popover = new RatingPopover();
+      const anchor = document.createElement('div');
+      document.body.append(anchor);
+      const sampleData: GameRatingData = {
+        appId: 1245620,
+        name: 'ELDEN RING',
+        positivePercent: 93,
+        scoreDesc: 'Very Positive',
+        totalReviews: 1150000,
+        totalPositive: 1070000,
+        totalNegative: 80000,
+        metascore: 94,
+        steamUrl: 'https://store.steampowered.com/app/1245620/',
+        steamDbUrl: 'https://steamdb.info/app/1245620/',
+        metacriticUrl: 'https://www.metacritic.com/game/elden-ring/',
+      };
+
+      popover.show(anchor, sampleData);
+      const popoverEl = document.querySelector('.fwe-rating-popover') as HTMLElement;
+      window.dispatchEvent(new Event('scroll'));
+      expect(popoverEl.classList.contains('fwe-rating-popover--visible')).toBe(true);
+      popover.destroy();
+    });
   });
 });

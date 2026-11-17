@@ -3,7 +3,8 @@ import {
   detectPageKind,
   DomTransaction,
   extractFacts,
-  formatRelativeTime,
+  formatRecentRelativeTime,
+  normalizeText,
   parseArchiveGroups,
   parseArticle,
   parseArticleDate,
@@ -18,16 +19,19 @@ import {
   getFastStoredLayoutMode,
   getFastStoredMediaExpand,
   getFastStoredShowRatings,
+  getFastStoredTheme,
   readStoredInfiniteScroll,
   readStoredLanguage,
   readStoredLayoutMode,
   readStoredMediaExpand,
   readStoredShowRatings,
+  readStoredTheme,
   writeStoredInfiniteScroll,
   writeStoredLanguage,
   writeStoredLayoutMode,
   writeStoredMediaExpand,
   writeStoredShowRatings,
+  writeStoredTheme,
 } from './preferences';
 import {
   cleanTitleBase,
@@ -46,6 +50,7 @@ import type {
   ParsedArticle,
   PopularItem,
   SupportedLanguage,
+  ThemeMode,
 } from './types';
 
 const FACT_ICONS = {
@@ -392,7 +397,7 @@ function createCardActions(
   }
 
   if (features) {
-    const btn = element('button', 'fwe-card-btn');
+    const btn = element('button', 'fwe-card-btn fwe-card-btn--ghost');
     btn.type = 'button';
     btn.setAttribute('data-fwe-toggle', `${article.root.id}-features`);
     btn.append(createIcon('features'), element('span', '', t('cardFeatures')));
@@ -404,7 +409,7 @@ function createCardActions(
   }
 
   if (description) {
-    const btn = element('button', 'fwe-card-btn');
+    const btn = element('button', 'fwe-card-btn fwe-card-btn--ghost');
     btn.type = 'button';
     btn.setAttribute('data-fwe-toggle', `${article.root.id}-desc`);
     btn.append(createIcon('description'), element('span', '', t('cardDescription')));
@@ -462,25 +467,59 @@ function createDetailSections(article: ParsedArticle, transaction: DomTransactio
   return container;
 }
 
+/**
+ * Renders the game info rows as definition list items.
+ *
+ * `Original Size` and `Repack Size` are two halves of the same fact — how big the
+ * install is versus how big the download is — so they share one row with an arrow
+ * between them. Rendering them separately cost a line and made the reader compare
+ * two numbers that are meant to be read as a pair. `ParsedArticle.facts` is left
+ * untouched; the merge happens here, in the rendering layer.
+ */
 function createFacts(article: ParsedArticle): HTMLElement {
   const list = element('dl', 'fwe-facts');
-  for (const fact of extractFacts(article.infoBlock)) {
+  const facts = extractFacts(article.infoBlock);
+  const originalIndex = facts.findIndex((fact) => fact.label === 'Original Size');
+  const repackIndex = facts.findIndex((fact) => fact.label === 'Repack Size');
+
+  facts.forEach((fact, index) => {
+    if (index === repackIndex && originalIndex >= 0) return;
+
     const item = element('div', 'fwe-fact');
     const term = element('dt', 'fwe-fact__label');
-    term.append(createIcon(FACT_ICONS[fact.label]), document.createTextNode(fact.label));
+    const isMergedSize = index === originalIndex && repackIndex >= 0;
+    if (isMergedSize) {
+      term.append(
+        createIcon(FACT_ICONS[fact.label]),
+        document.createTextNode(t('factSizeMergedLabel')),
+      );
+    } else {
+      term.append(createIcon(FACT_ICONS[fact.label]), document.createTextNode(fact.label));
+    }
+
     const description = element('dd', 'fwe-fact__value');
     if (fact.links.length > 0) {
-      fact.links.forEach((link, index) => {
-        if (index > 0) description.append(document.createTextNode(', '));
+      fact.links.forEach((link, linkIndex) => {
+        if (linkIndex > 0) description.append(document.createTextNode(', '));
         const anchor = element('a');
         anchor.href = link.href;
         anchor.textContent = link.text;
         description.append(anchor);
       });
-    } else description.textContent = fact.value;
+    } else if (isMergedSize) {
+      const repack = facts[repackIndex];
+      description.textContent = t('factSizeMerged', {
+        original: fact.value,
+        repack: repack?.value ?? '',
+      });
+    } else {
+      description.textContent = fact.value;
+    }
+
     item.append(term, description);
     list.append(item);
-  }
+  });
+
   return list;
 }
 
@@ -1077,11 +1116,22 @@ export class RatingPopover {
   private readonly steamDbLink: HTMLAnchorElement;
   private readonly metacriticLink: HTMLAnchorElement;
   private readonly unmatchedRetryBtn: HTMLButtonElement;
-  private hideTimeout: number | null = null;
   public currentAnchor: HTMLElement | null = null;
   private onRefreshCallback: (() => void) | null = null;
   private currentData: GameRatingData | null = null;
   private unmatchedKind: 'unmatched' | 'unavailable' = 'unmatched';
+
+  /** 点在弹层与当前锚点之外即关闭；触屏没有 hover，这是唯一的「失焦」信号。 */
+  private readonly onDocumentPointerDown = (event: PointerEvent): void => {
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (this.element.contains(target) || this.currentAnchor?.contains(target)) return;
+    this.hide();
+  };
+
+  private readonly onEscapeKey = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') this.hide();
+  };
 
   constructor() {
     this.element = element('div', 'fwe-rating-popover');
@@ -1176,21 +1226,8 @@ export class RatingPopover {
     );
     document.body.append(this.element);
 
-    this.element.addEventListener('mouseenter', () => {
-      if (this.hideTimeout !== null) {
-        window.clearTimeout(this.hideTimeout);
-        this.hideTimeout = null;
-      }
-    });
-
-    this.element.addEventListener('mouseleave', () => {
-      this.hide();
-    });
-
-    window.addEventListener('scroll', () => this.hide(0), { passive: true });
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.hide(0);
-    });
+    document.addEventListener('pointerdown', this.onDocumentPointerDown);
+    document.addEventListener('keydown', this.onEscapeKey);
   }
 
   private triggerRefresh(): void {
@@ -1200,7 +1237,7 @@ export class RatingPopover {
     if (this.onRefreshCallback) {
       this.onRefreshCallback();
     }
-    this.hide(0);
+    this.hide();
   }
 
   private positionAt(anchor: HTMLElement): void {
@@ -1211,14 +1248,11 @@ export class RatingPopover {
     const popoverRect = this.element.getBoundingClientRect();
 
     let top = anchorRect.bottom + 8 + window.scrollY;
-    let left = anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2 + window.scrollX;
+    // 右对齐锚点的右边：徽章在视口右侧时，弹层右边贴徽章右边而不是被钳到视口边缘。
+    let left = anchorRect.right - popoverRect.width + window.scrollX;
 
-    if (left + popoverRect.width > window.innerWidth + window.scrollX - 16) {
-      left = window.innerWidth + window.scrollX - popoverRect.width - 16;
-    }
-    if (left < window.scrollX + 16) {
-      left = window.scrollX + 16;
-    }
+    const maxLeft = window.innerWidth + window.scrollX - popoverRect.width - 16;
+    left = Math.min(Math.max(left, window.scrollX + 16), maxLeft);
 
     if (
       anchorRect.bottom + popoverRect.height + 16 > window.innerHeight &&
@@ -1233,9 +1267,9 @@ export class RatingPopover {
   }
 
   show(anchor: HTMLElement, data: GameRatingData, onRefresh?: () => void): void {
-    if (this.hideTimeout !== null) {
-      window.clearTimeout(this.hideTimeout);
-      this.hideTimeout = null;
+    // 切换锚点时先复位旧徽章：键盘 Tab + Enter（无 pointerdown）不会走 hide()。
+    if (this.currentAnchor !== anchor) {
+      this.currentAnchor?.setAttribute('aria-expanded', 'false');
     }
     this.currentAnchor = anchor;
     this.currentData = data;
@@ -1302,9 +1336,9 @@ export class RatingPopover {
     kind: 'unmatched' | 'unavailable',
     onRefresh?: () => void,
   ): void {
-    if (this.hideTimeout !== null) {
-      window.clearTimeout(this.hideTimeout);
-      this.hideTimeout = null;
+    // 切换锚点时先复位旧徽章：键盘 Tab + Enter（无 pointerdown）不会走 hide()。
+    if (this.currentAnchor !== anchor) {
+      this.currentAnchor?.setAttribute('aria-expanded', 'false');
     }
     this.currentAnchor = anchor;
     this.currentData = null;
@@ -1371,31 +1405,18 @@ export class RatingPopover {
       : t('ratingUnmatchedText');
   }
 
-  hide(delay = 180): void {
-    if (this.hideTimeout !== null) {
-      window.clearTimeout(this.hideTimeout);
-      this.hideTimeout = null;
-    }
-    if (delay === 0) {
-      this.element.classList.remove('fwe-rating-popover--visible');
-      this.element.style.setProperty('display', 'none');
-      this.element.setAttribute('aria-hidden', 'true');
-      this.currentAnchor = null;
-      return;
-    }
-    this.hideTimeout = window.setTimeout(() => {
-      this.element.classList.remove('fwe-rating-popover--visible');
-      this.element.style.setProperty('display', 'none');
-      this.element.setAttribute('aria-hidden', 'true');
-      this.currentAnchor = null;
-    }, delay);
+  hide(): void {
+    this.element.classList.remove('fwe-rating-popover--visible');
+    this.element.style.setProperty('display', 'none');
+    this.element.setAttribute('aria-hidden', 'true');
+    this.currentAnchor?.setAttribute('aria-expanded', 'false');
+    this.currentAnchor = null;
   }
 
   destroy(): void {
-    if (this.hideTimeout !== null) {
-      window.clearTimeout(this.hideTimeout);
-      this.hideTimeout = null;
-    }
+    document.removeEventListener('pointerdown', this.onDocumentPointerDown);
+    document.removeEventListener('keydown', this.onEscapeKey);
+    this.hide();
     this.element.remove();
   }
 }
@@ -1453,33 +1474,30 @@ function renderUnmatchedBadge(
   );
   badge.append(pill);
 
-  badge.addEventListener('mouseenter', () => {
+  const toggle = (): void => {
+    if (popover.currentAnchor === badge) {
+      popover.hide();
+      badge.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    badge.setAttribute('aria-expanded', 'true');
     if (kind === 'unavailable') {
       popover.showUnavailable(badge, article.title, triggerRefresh);
     } else {
       popover.showUnmatched(badge, article.title, triggerRefresh);
     }
-  });
-  badge.addEventListener('mouseleave', () => {
-    popover.hide();
-  });
+  };
+
+  badge.setAttribute('aria-expanded', 'false');
   badge.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (kind === 'unavailable') {
-      popover.showUnavailable(badge, article.title, triggerRefresh);
-    } else {
-      popover.showUnmatched(badge, article.title, triggerRefresh);
-    }
+    toggle();
   });
   badge.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       e.stopPropagation();
-      if (kind === 'unavailable') {
-        popover.showUnavailable(badge, article.title, triggerRefresh);
-      } else {
-        popover.showUnmatched(badge, article.title, triggerRefresh);
-      }
+      toggle();
     }
   });
 
@@ -1516,97 +1534,35 @@ function renderSuccessBadge(
   steamPill.append(element('span', 'fwe-rating-percent', `${data.positivePercent}%`));
   badge.append(steamPill);
 
-  if (typeof data.metascore === 'number') {
-    const metaPill = element(
-      'span',
-      `fwe-rating-pill fwe-rating-pill--meta ${getMetaColorClass(data.metascore)}`,
-    );
-    metaPill.append(createIcon('metacritic', 'fwe-rating-icon-meta'));
-    metaPill.append(element('span', 'fwe-rating-metascore', String(data.metascore)));
-    badge.append(metaPill);
-  }
+  // The Metacritic score deliberately stays out of the card corner: a second
+  // number there made "what is this game rated" ambiguous. It is still reachable
+  // from the RatingPopover, which is the single rating slot on every page.
 
-  badge.addEventListener('mouseenter', () => {
+  const toggle = (): void => {
+    if (popover.currentAnchor === badge) {
+      popover.hide();
+      badge.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    badge.setAttribute('aria-expanded', 'true');
     popover.show(badge, data, triggerRefresh);
-  });
-  badge.addEventListener('mouseleave', () => {
-    popover.hide();
-  });
+  };
 
+  badge.setAttribute('aria-expanded', 'false');
   badge.addEventListener('click', (e) => {
     e.stopPropagation();
-    window.open(data.steamUrl, '_blank', 'noopener,noreferrer');
+    toggle();
   });
 
   badge.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       e.stopPropagation();
-      window.open(data.steamUrl, '_blank', 'noopener,noreferrer');
+      toggle();
     }
   });
 
   container.append(badge);
-}
-
-function updateDetailFactsWithRating(
-  article: ParsedArticle,
-  data: GameRatingData,
-  triggerRefresh?: () => void,
-): void {
-  const factsList = article.root.querySelector<HTMLElement>('.fwe-facts');
-  if (!factsList) return;
-
-  let item = factsList.querySelector<HTMLElement>('.fwe-fact--rating');
-  if (!item) {
-    item = element('div', 'fwe-fact fwe-fact--rating');
-    factsList.append(item);
-  }
-  item.innerHTML = '';
-
-  const term = element('dt', 'fwe-fact__label');
-  term.append(createIcon('star'), document.createTextNode('Rating'));
-  const description = element('dd', 'fwe-fact__value');
-
-  const localizedDesc = translateScoreDesc(data.scoreDesc, getActiveLanguage());
-  const reviewCountText = t('reviewCount', { total: data.totalReviews.toLocaleString() });
-  const steamLink = element(
-    'a',
-    'fwe-fact-link',
-    `Steam: ${data.positivePercent}% (${localizedDesc} · ${reviewCountText})`,
-  );
-  steamLink.href = data.steamUrl;
-  steamLink.target = '_blank';
-  steamLink.rel = 'noopener noreferrer';
-  description.append(steamLink);
-
-  if (typeof data.metascore === 'number') {
-    description.append(document.createTextNode(' · '));
-    const metaLink = element('a', 'fwe-fact-link', `Metacritic: ${data.metascore}/100`);
-    metaLink.href = data.metacriticUrl || data.steamUrl;
-    metaLink.target = '_blank';
-    metaLink.rel = 'noopener noreferrer';
-    description.append(metaLink);
-  }
-
-  if (triggerRefresh) {
-    const refreshBtn = element('button', 'fwe-fact-refresh-btn');
-    refreshBtn.type = 'button';
-    refreshBtn.title = t('ratingRefreshTitle');
-    refreshBtn.setAttribute('aria-label', t('ratingRefreshAria'));
-    refreshBtn.append(createIcon('refresh', 'fwe-fact-refresh-icon'));
-    refreshBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const icon = refreshBtn.querySelector('.fwe-fact-refresh-icon');
-      icon?.classList.add('fwe-spin');
-      refreshBtn.disabled = true;
-      triggerRefresh();
-    });
-    description.append(document.createTextNode(' '), refreshBtn);
-  }
-
-  item.append(term, description);
 }
 
 export async function loadRatingForBadge(
@@ -1641,12 +1597,52 @@ export async function loadRatingForBadge(
     const data = result.data;
 
     renderSuccessBadge(container, data, popover, triggerRefresh);
-
-    if (article.pageKind === 'single') {
-      updateDetailFactsWithRating(article, data, triggerRefresh);
-    }
   } catch {
     renderUnmatchedBadge(container, article, popover, triggerRefresh, 'unavailable');
+  }
+}
+
+/**
+ * The Tolstoy comments plugin fills `.tolstoycomments-cc` spans once at init
+ * via `getElementsByClassName`, so cards inserted by infinite scroll never get
+ * their count. This function asks the plugin's live `comment.update()` to
+ * rescan the document and refill only the spans that are still empty — avoiding
+ * a no-op request when every span already has text, or when the plugin never
+ * loaded.
+ */
+export function refillThirdPartyCommentCounts(): void {
+  const spans = document.querySelectorAll<HTMLElement>('.tolstoycomments-cc');
+  if (spans.length === 0) {
+    return;
+  }
+
+  const emptyCount = [...spans].filter((span) => span.textContent?.trim() === '').length;
+  if (emptyCount === 0) {
+    return;
+  }
+
+  const maybePlugin = window as unknown as {
+    tolstoycomments?: { comment?: { update?: () => Promise<unknown> } };
+  };
+  const maybeUpdate = maybePlugin.tolstoycomments?.comment?.update;
+  if (typeof maybeUpdate !== 'function') {
+    return;
+  }
+
+  try {
+    const result = maybeUpdate.call(maybePlugin.tolstoycomments?.comment);
+    /*
+     * The plugin returns a promise in some environments. Attach a no-op catch
+     * so a rejection does not leak as an unhandled rejection — this function
+     * is fire-and-forget from `loadNextPage()` and never awaits.
+     */
+    if (result && typeof result.catch === 'function') {
+      result.catch(() => {
+        /* silence: a single failed refill is not worth bubbling up */
+      });
+    }
+  } catch {
+    /* silence: a synchronous throw from the plugin should not break infinite scroll */
   }
 }
 
@@ -1670,6 +1666,51 @@ function createRatingBadge(
   return container;
 }
 
+function createMetaChip(icon: Parameters<typeof createIcon>[0], ...content: Node[]): HTMLElement {
+  const chip = element('span', 'fwe-meta-chip');
+  chip.append(createIcon(icon, 'fwe-meta-chip__icon'), ...content);
+  return chip;
+}
+
+/**
+ * Moves the meaningful children of an original `.entry-meta` span (categories,
+ * byline, comments link) into an enhanced meta chip. Whitespace-only text nodes
+ * stay behind so the transaction can restore the original markup byte for byte.
+ * Anchors keep their `href`, and nodes such as `.tolstoycomments-cc` keep their
+ * identity so third-party scripts can still inject into them.
+ */
+function relocateMetaContent(
+  source: HTMLElement,
+  chip: HTMLElement,
+  transaction: DomTransaction,
+): boolean {
+  let moved = false;
+  [...source.childNodes].forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE && !normalizeText(node.textContent)) return;
+    transaction.move(node, chip);
+    moved = true;
+  });
+  return moved;
+}
+
+/**
+ * Re-renders a date chip's label.
+ *
+ * The chip always carries the absolute date; posts inside the recent window get
+ * the relative wording prefixed so a stream reader can see freshness at a
+ * glance. Older posts show the date alone — `formatRelativeTime` would keep
+ * inventing "3mo ago" style wording, which is noise next to a full date.
+ */
+function refreshDateChip(chip: HTMLElement, lang: SupportedLanguage): void {
+  const label = chip.querySelector<HTMLElement>('.fwe-meta-chip__date');
+  if (!label) return;
+
+  const absolute = chip.dataset.fweDateAbsolute ?? '';
+  const iso = chip.dataset.dateIso;
+  const relative = iso ? formatRecentRelativeTime(new Date(iso), new Date(), lang) : '';
+  label.textContent = relative ? t('dateChipRecent', { relative, absolute }, lang) : absolute;
+}
+
 function addArticleMeta(
   article: ParsedArticle,
   transaction: DomTransaction,
@@ -1682,37 +1723,49 @@ function addArticleMeta(
   const originalDate = header.querySelector<HTMLElement>('.entry-date') || timeNode;
   if (!originalDate && !timeNode) return;
 
-  const displayDateText = (timeNode?.textContent || originalDate?.textContent || '').trim();
+  const displayDateText = normalizeText(timeNode?.textContent || originalDate?.textContent);
+  const parsedDate = parseArticleDate(originalDate, header);
+
+  // The date chip keeps its own label node so a language switch can re-render the
+  // wording without rebuilding the chip (and losing the calendar icon).
+  const dateLabel = element('span', 'fwe-meta-chip__date', displayDateText);
+  const dateChip = createMetaChip('calendar', dateLabel);
+  dateChip.dataset.fweDateAbsolute = displayDateText;
+  if (parsedDate) dateChip.dataset.dateIso = parsedDate.toISOString();
+
   const meta = element('div', 'fwe-article-meta');
-  meta.append(createIcon('calendar'), document.createTextNode(displayDateText));
+  meta.append(dateChip);
   transaction.insert(meta, header);
+  refreshDateChip(dateChip, getActiveLanguage());
 
-  // Inject rating badge and relative time badge to the right of header
+  const metaSources: Array<[string, Parameters<typeof createIcon>[0]]> = [
+    ['.cat-links', 'tag'],
+    ['.byline', 'user'],
+    ['.comments-link', 'comment'],
+  ];
+  for (const [selector, icon] of metaSources) {
+    const source = header.querySelector<HTMLElement>(selector);
+    if (!source) continue;
+    const chip = createMetaChip(icon);
+    if (relocateMetaContent(source, chip, transaction)) meta.append(chip);
+  }
+
   const title = header.querySelector<HTMLElement>('.entry-title');
-  if (title && !header.querySelector('.fwe-header-right')) {
-    const parsedDate = parseArticleDate(originalDate, header);
-    let timeText = displayDateText;
-    if (parsedDate) {
-      timeText = formatRelativeTime(parsedDate, new Date(), getActiveLanguage());
-    }
+
+  // The pink paw award belongs beside the title it was awarded to. It used to sit
+  // in the score corner, where it competed with the rating for the one slot a
+  // reader scans first.
+  if (title && article.hasPinkPawAward && !title.querySelector('.fwe-paw-badge')) {
+    const pawBadge = element('span', 'fwe-paw-badge', t('pinkPawBadge'));
+    pawBadge.title = 'FitGirl Personal Pink Paw Award';
+    title.append(pawBadge);
+  }
+
+  // The score corner now holds the rating alone; the relative time moved into the
+  // date chip, where it sits with the rest of the post's metadata.
+  if (title && popover && article.kind === 'game' && !header.querySelector('.fwe-header-right')) {
     const rightBox = element('div', 'fwe-header-right');
-
-    if (popover && article.kind === 'game') {
-      const ratingContainer = createRatingBadge(article, popover, ratingObserver ?? null);
-      rightBox.append(ratingContainer);
-    }
-
-    if (article.hasPinkPawAward) {
-      const pawBadge = element('span', 'fwe-paw-badge', t('pinkPawBadge'));
-      pawBadge.title = 'FitGirl Personal Pink Paw Award';
-      rightBox.append(pawBadge);
-    }
-
-    const timeBadge = element('span', 'fwe-time-ago', timeText);
-    if (parsedDate) {
-      timeBadge.dataset.dateIso = parsedDate.toISOString();
-    }
-    rightBox.append(timeBadge);
+    rightBox.append(createRatingBadge(article, popover, ratingObserver ?? null));
     transaction.insert(rightBox, header);
   }
 }
@@ -1899,6 +1952,7 @@ function transformSpecial(article: ParsedArticle, transaction: DomTransaction): 
     title.startsWith('updates digest')
   ) {
     transaction.addClass(article.root, 'fwe-digest');
+    addCardKindLabel(article, transaction, t('cardKindDigest'));
     transformLegacySpoilers(article, transaction);
   } else if (title === 'popular repacks') {
     transaction.addClass(article.root, 'fwe-directory-popular');
@@ -1912,7 +1966,23 @@ function transformSpecial(article: ParsedArticle, transaction: DomTransaction): 
   } else if (title === 'updates list') {
     transaction.addClass(article.root, 'fwe-directory-updates');
     transformLegacySpoilers(article, transaction);
+  } else {
+    transaction.addClass(article.root, 'fwe-notice');
+    // Anything left is a site notice rather than a game, and it used to look like
+    // a game card until the reader opened it.
+    addCardKindLabel(article, transaction, t('cardKindNotice'));
   }
+}
+
+/** 在 special 卡内容顶部放一枚种类标签，说明「这不是一款游戏」 */
+function addCardKindLabel(
+  article: ParsedArticle,
+  transaction: DomTransaction,
+  label: string,
+): void {
+  if (!article.entry || article.entry.querySelector('.fwe-card-kind')) return;
+  const kind = element('span', 'fwe-card-kind', label);
+  transaction.insert(kind, article.entry, article.entry.firstChild);
 }
 
 function createSearchForm(): {
@@ -1990,6 +2060,120 @@ function appendNavigation(parent: HTMLElement, items: NavigationItem[]): void {
   parent.append(list);
 }
 
+/**
+ * Loading placeholder for the next page of the stream.
+ *
+ * The spinner it replaces said "something is happening" without saying what, and
+ * it collapsed the stream to a 4rem strip while the request was in flight — so
+ * when the real cards landed, everything below jumped. Cards shaped like the
+ * real ones answer both: the reader sees what is coming, and the row they
+ * occupy is the row the content will fill.
+ *
+ * Restraint applies here too: the placeholder is drawn with `--fwe-line` alone,
+ * because pink is reserved for the primary action.
+ */
+function createSkeletonCard(): HTMLElement {
+  const card = element('article', 'fwe-skeleton-card');
+  // Placeholders carry no information, so they stay out of the accessibility
+  // tree instead of announcing a pile of empty boxes.
+  card.setAttribute('aria-hidden', 'true');
+
+  const header = element('div', 'fwe-skeleton-card__header');
+  header.append(
+    element('span', 'fwe-skeleton__block fwe-skeleton__title-line'),
+    element('span', 'fwe-skeleton__block fwe-skeleton__title-line'),
+  );
+
+  const meta = element('div', 'fwe-skeleton-card__meta');
+  meta.append(element('span', 'fwe-skeleton__block fwe-skeleton__meta-line'));
+
+  const facts = element('div', 'fwe-skeleton-card__facts');
+  for (let index = 0; index < 4; index += 1) {
+    facts.append(element('div', 'fwe-skeleton__fact-row'));
+  }
+
+  const gallery = element('div', 'fwe-skeleton__block fwe-skeleton__gallery');
+
+  const actions = element('div', 'fwe-skeleton__actions');
+  actions.append(
+    element('span', 'fwe-skeleton__block fwe-skeleton__action'),
+    element('span', 'fwe-skeleton__block fwe-skeleton__action'),
+  );
+
+  card.append(header, meta, facts, gallery, actions);
+  return card;
+}
+
+/**
+ * Builds the whole loading state: one skeleton card per stream column, plus the
+ * small line of text that says what is being waited for. The card count has to
+ * match the column count, or the placeholder row will not line up with the row
+ * the real cards land in.
+ */
+function createSkeletonGrid(columnCount: number): HTMLElement {
+  const grid = element('div', 'fwe-skeleton');
+  grid.style.setProperty('--fwe-skeleton-cols', String(columnCount));
+  for (let index = 0; index < columnCount; index += 1) {
+    grid.append(createSkeletonCard());
+  }
+  grid.append(element('p', 'fwe-skeleton__label', t('infiniteLoading')));
+  return grid;
+}
+
+/*
+ * M2 的页数记忆。基名与 `preferences.ts` 的既有偏好同一命名空间；sessionStorage
+ * 不需要新的 @grant，且随标签页消亡，正好配「这次浏览滚到哪了」的语义。
+ *
+ * 后缀是列表根路径而不是当前 URL：`replaceState` 会把地址改写成 `/page/N/`，
+ * 键若跟着跑，同一列表在 `/` 和 `/page/2/` 下就记成两本账，刷新后谁也补不上
+ * 谁。查询串刻意不进键——它会被分页链接改写，而「键必须在 replaceState 之后
+ * 依然稳定」是这条记忆唯一不能破的性质。
+ */
+const INFINITE_PAGES_KEY_PREFIX = 'fitgirl-web-enhanced:v1:infinite-pages:';
+
+/** 列表根：剥掉路径末尾的 `/page/N/` 段 */
+function listingRootPath(pathname: string): string {
+  return pathname.replace(/\/page\/\d+\/?$/, '') || '/';
+}
+
+function rememberedPagesKey(): string {
+  return `${INFINITE_PAGES_KEY_PREFIX}${listingRootPath(window.location.pathname)}`;
+}
+
+/**
+ * 初始文档是第几页。
+ *
+ * 刷新可能直接落在 `/page/N/` 上——WordPress 会服务那一页的文章。此时已加载
+ * 页数必须从 N 起算：若一律按 1 算，「补齐到记忆页数」会在用户已经看过的那一页
+ * 后面再多抓一整页，刷新后的内容和刷新前完全对不上。
+ */
+function readInitialPageNumber(): number {
+  const captured = /\/page\/(\d+)\/?$/.exec(window.location.pathname)?.[1];
+  const page = captured === undefined ? 1 : Number.parseInt(captured, 10);
+  return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
+/**
+ * 记住的已加载页数。脏值（空串 / 非数字 / ≤0）一律回退成 1，即「不补齐」。
+ */
+function readRememberedPageCount(): number {
+  try {
+    const parsed = Number.parseInt(window.sessionStorage.getItem(rememberedPagesKey()) ?? '', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function writeRememberedPageCount(count: number): void {
+  try {
+    // 只往高处写：回落到第 1 页没有记忆价值，留着旧值反而会在下次刷新时误导
+    if (count > 1) window.sessionStorage.setItem(rememberedPagesKey(), String(count));
+  } catch {
+    // sessionStorage 被禁用时静默跳过：URL 同步与加载本身都不依赖它
+  }
+}
+
 function appendArchives(parent: HTMLElement, groups: ArchiveGroup[]): void {
   const section = element('section', 'fwe-archives');
   section.append(element('h2', '', t('archivesHeading')));
@@ -2040,6 +2224,7 @@ export class FitGirlEnhancedApp {
   private infiniteScroll: boolean;
   private showRatings: boolean;
   private language: SupportedLanguage;
+  private theme: ThemeMode;
   private transaction: DomTransaction | null = null;
   private observer: MutationObserver | null = null;
   private videoObserver: IntersectionObserver | null = null;
@@ -2048,6 +2233,21 @@ export class FitGirlEnhancedApp {
   private processing = false;
   private loadingNextPage = false;
   private hasNextPage = true;
+  /**
+   * M6：已加载文章的 id 增量集合。
+   *
+   * 替代原先每次 `loadNextPage()` 都 `document.querySelectorAll('article.hentry')`
+   * 重建全量 Set——那个开销随页数线性增长。这里在 `processArticles()` 遍历时
+   * 顺手累积，代价摊进本来就要走的那一遍。
+   *
+   * 关键：`.fwe-stream` 新建时必须重置。切回 original 会 `restore()` 掉整条流，
+   * 再切回来时文章节点是全新的，旧 id 还留在集合里会把新文章判成重复而剔除掉。
+   */
+  private loadedArticleIds = new Set<string>();
+  /** M2：已加载页数。初始文档算第 1 页，但刷新可能直接落在 `/page/N/` 上 */
+  private loadedPageCount = readInitialPageNumber();
+  /** M2：补齐只在每次文档加载时尝试一次，切模式不重复补 */
+  private pagesRestoreStarted = false;
   private observerTimer: number | null = null;
   private readonly viewControl: HTMLDetailsElement;
   private readonly viewSummarySpan: HTMLElement;
@@ -2065,6 +2265,10 @@ export class FitGirlEnhancedApp {
   private readonly languageLabel: HTMLElement;
   private readonly enButton: HTMLButtonElement;
   private readonly zhButton: HTMLButtonElement;
+  private readonly themeLabel: HTMLElement;
+  private readonly lightThemeButton: HTMLButtonElement;
+  private readonly darkThemeButton: HTMLButtonElement;
+  private readonly systemThemeButton: HTMLButtonElement;
   private readonly popularButton: HTMLButtonElement;
   private readonly popularButtonText: Text;
   private readonly browseButton: HTMLButtonElement;
@@ -2085,6 +2289,13 @@ export class FitGirlEnhancedApp {
   private resizeListenerAttached = false;
   private backToTopVisibilityListenerAttached = false;
   private clearRatingCacheStatusTimer: number | null = null;
+  /**
+   * 上一篇/下一篇标签的文本节点。`applyLanguage()` 要重写这两枚文本，但
+   * `localizePostNavigation()` 不能重跑一遍：它会二次插入箭头，并把已经本地化
+   * 的文案当「原始内容」记进 DomTransaction，切回原站模式就还原成中文了。
+   */
+  private navPrevLabel: Text | null = null;
+  private navNextLabel: Text | null = null;
 
   constructor() {
     this.mode = getFastStoredLayoutMode();
@@ -2094,6 +2305,10 @@ export class FitGirlEnhancedApp {
     this.language = getFastStoredLanguage() ?? detectBrowserLanguage();
     setActiveLanguage(this.language);
     document.documentElement.dataset.fweLang = this.language;
+    // The palette is resolved before any node is built so the very first paint
+    // already carries it — same reason as `data-fwe-mode`.
+    this.theme = getFastStoredTheme();
+    document.documentElement.dataset.fweTheme = this.theme;
 
     this.lightbox = new ImageLightbox();
     this.gameModal = new GameDetailModal();
@@ -2207,7 +2422,7 @@ export class FitGirlEnhancedApp {
     this.languageLabel = element('span', 'fwe-view-control__label', t('language', this.language));
     langRow.append(this.languageLabel);
 
-    const segmented = element('div', 'fwe-segmented');
+    const segmented = element('div', 'fwe-segmented fwe-segmented--lang');
     segmented.setAttribute('role', 'group');
     segmented.setAttribute('aria-label', t('languageAria', this.language));
 
@@ -2230,6 +2445,35 @@ export class FitGirlEnhancedApp {
     segmented.append(this.enButton, this.zhButton);
     langRow.append(segmented);
 
+    const themeRow = element('div', 'fwe-view-control__row');
+    this.themeLabel = element('span', 'fwe-view-control__label', t('theme', this.language));
+    themeRow.append(this.themeLabel);
+
+    const themeSegmented = element('div', 'fwe-segmented fwe-segmented--theme');
+    themeSegmented.setAttribute('role', 'group');
+    themeSegmented.setAttribute('aria-label', t('themeAria', this.language));
+
+    const themeOptions: Array<[ThemeMode, string]> = [
+      ['light', t('themeLight', this.language)],
+      ['dark', t('themeDark', this.language)],
+      ['system', t('themeSystem', this.language)],
+    ];
+    for (const [value, label] of themeOptions) {
+      const button = element(
+        'button',
+        `fwe-segmented__btn${this.theme === value ? ' fwe-segmented__btn--active' : ''}`,
+        label,
+      );
+      button.type = 'button';
+      button.dataset.theme = value;
+      button.setAttribute('aria-pressed', String(this.theme === value));
+      themeSegmented.append(button);
+    }
+    this.lightThemeButton = themeSegmented.children[0] as HTMLButtonElement;
+    this.darkThemeButton = themeSegmented.children[1] as HTMLButtonElement;
+    this.systemThemeButton = themeSegmented.children[2] as HTMLButtonElement;
+    themeRow.append(themeSegmented);
+
     panel.append(
       layoutRow,
       mediaRow,
@@ -2238,6 +2482,7 @@ export class FitGirlEnhancedApp {
       clearRatingCacheRow,
       this.clearRatingCacheStatus,
       langRow,
+      themeRow,
     );
     this.viewControl.append(viewSummary, panel);
     this.mountControls();
@@ -2275,6 +2520,9 @@ export class FitGirlEnhancedApp {
     this.backToTopButton.addEventListener('click', () => this.scrollToTop());
     this.enButton.addEventListener('click', () => void this.setLanguage('en'));
     this.zhButton.addEventListener('click', () => void this.setLanguage('zh-CN'));
+    this.lightThemeButton.addEventListener('click', () => void this.setTheme('light'));
+    this.darkThemeButton.addEventListener('click', () => void this.setTheme('dark'));
+    this.systemThemeButton.addEventListener('click', () => void this.setTheme('system'));
     this.popularButton.addEventListener('click', () =>
       this.openDialog(this.popularDialog, this.popularButton),
     );
@@ -2291,12 +2539,13 @@ export class FitGirlEnhancedApp {
   }
 
   async start(): Promise<void> {
-    const [mode, mediaExpanded, infiniteScroll, showRatings, language] = await Promise.all([
+    const [mode, mediaExpanded, infiniteScroll, showRatings, language, theme] = await Promise.all([
       readStoredLayoutMode(),
       readStoredMediaExpand(),
       readStoredInfiniteScroll(),
       readStoredShowRatings(),
       readStoredLanguage(),
+      readStoredTheme(),
     ]);
     if (this.mode !== mode) {
       this.mode = mode;
@@ -2318,6 +2567,9 @@ export class FitGirlEnhancedApp {
     if (this.language !== resolvedLang) {
       this.language = resolvedLang;
       this.applyLanguage(resolvedLang);
+    }
+    if (this.theme !== theme) {
+      this.applyTheme(theme);
     }
   }
 
@@ -2380,8 +2632,37 @@ export class FitGirlEnhancedApp {
     window.addEventListener('resize', () => this.updateBackToTopVisibility(), { passive: true });
   }
 
+  /**
+   * `system` is stored and applied verbatim: the stylesheet answers it with
+   * `color-scheme: light dark` plus a `prefers-color-scheme` token block, so an
+   * OS flip repaints without this method running again.
+   */
+  private async setTheme(theme: ThemeMode): Promise<void> {
+    if (this.theme === theme) return;
+    this.theme = theme;
+    const buttons = [this.lightThemeButton, this.darkThemeButton, this.systemThemeButton];
+    buttons.forEach((button) => {
+      button.disabled = true;
+    });
+    await writeStoredTheme(theme);
+    this.applyTheme(theme);
+    buttons.forEach((button) => {
+      button.disabled = false;
+    });
+  }
+
+  private applyTheme(theme: ThemeMode): void {
+    this.theme = theme;
+    document.documentElement.dataset.fweTheme = theme;
+
+    for (const button of [this.lightThemeButton, this.darkThemeButton, this.systemThemeButton]) {
+      const active = button.dataset.theme === theme;
+      button.classList.toggle('fwe-segmented__btn--active', active);
+      button.setAttribute('aria-pressed', String(active));
+    }
+  }
+
   private async setLanguage(lang: SupportedLanguage): Promise<void> {
-    if (this.language === lang) return;
     this.language = lang;
     this.enButton.disabled = true;
     this.zhButton.disabled = true;
@@ -2414,6 +2695,12 @@ export class FitGirlEnhancedApp {
     this.backToTopButton.setAttribute('aria-label', t('backToTopAria', lang));
     this.backToTopButtonSpan.textContent = t('backToTop', lang);
     this.languageLabel.textContent = t('language', lang);
+    this.themeLabel.textContent = t('theme', lang);
+    const themeGroup = this.lightThemeButton.parentElement;
+    themeGroup?.setAttribute('aria-label', t('themeAria', lang));
+    this.lightThemeButton.textContent = t('themeLight', lang);
+    this.darkThemeButton.textContent = t('themeDark', lang);
+    this.systemThemeButton.textContent = t('themeSystem', lang);
 
     // Update segmented buttons
     this.enButton.classList.toggle('fwe-segmented__btn--active', lang === 'en');
@@ -2451,21 +2738,25 @@ export class FitGirlEnhancedApp {
     this.lightbox.updateLanguage();
     this.gameModal.updateLanguage();
 
-    // Update relative time badges
-    document.querySelectorAll<HTMLElement>('.fwe-time-ago').forEach((el) => {
-      const iso = el.dataset.dateIso;
-      if (iso) {
-        const date = new Date(iso);
-        if (!isNaN(date.getTime())) {
-          el.textContent = formatRelativeTime(date, new Date(), lang);
-        }
-      }
+    // Re-render date chips so the relative wording follows the active language
+    document.querySelectorAll<HTMLElement>('.fwe-meta-chip[data-date-iso]').forEach((chip) => {
+      refreshDateChip(chip, lang);
     });
 
     // Update Pink Paw badge text if present
     document.querySelectorAll<HTMLElement>('.fwe-paw-badge').forEach((el) => {
       el.textContent = t('pinkPawBadge', lang);
     });
+
+    /*
+     * 上一篇/下一篇的标签来自主题写死的英文，只能由 `localizePostNavigation()`
+     * 换掉一次。之后切语言必须就地改那两枚文本节点：重跑整套本地化会再插一枚
+     * 箭头，也会把已翻译的文案当成原始内容记进事务。
+     */
+    if (this.transaction) {
+      if (this.navPrevLabel) this.navPrevLabel.textContent = t('prevPost', lang);
+      if (this.navNextLabel) this.navNextLabel.textContent = t('nextPost', lang);
+    }
 
     document.querySelectorAll<HTMLAnchorElement>('.fwe-upcoming__details-link').forEach((link) => {
       link.textContent = t('upcomingDetails', lang);
@@ -2521,6 +2812,9 @@ export class FitGirlEnhancedApp {
   private applyMediaExpand(expanded: boolean): void {
     this.mediaSwitchButton.setAttribute('aria-checked', String(expanded));
     document.querySelectorAll<HTMLDetailsElement>('.fwe-media').forEach((media) => {
+      // 详情页图库恒展开，与 `prepareMedia` 的 `isDetail ? true : mediaExpanded` 一致：
+      // 这条偏好描述的是列表卡片，不能顺手把详情页的截图区折起来。
+      if (media.closest('.fwe-detail')) return;
       media.open = expanded;
     });
   }
@@ -2533,19 +2827,84 @@ export class FitGirlEnhancedApp {
     this.infiniteSwitchButton.disabled = false;
   }
 
+  /**
+   * M3/M4 共用：往哨兵里写一条文案，可选带一枚走 `loadNextPage()` 的按钮。
+   *
+   * 两处调用必须走同一个方法而不是各写一遍：M3 的失败态与 M4 的「加载更多」
+   * 在视觉上是同一枚按钮，只是语义不同（重试 vs 手动加载）。分叉成两份实现
+   * 的话，改样式只改到一边，另一个入口就会悄悄掉队。
+   */
+  private renderSentinelMessage(
+    sentinel: HTMLElement | null,
+    message: string,
+    withButton: boolean,
+  ): void {
+    if (!sentinel) return;
+    /*
+     * M4：只跳过「内容完全没变」的情况。
+     *
+     * `processArticles()` 每次插入后都会经 `applyInfiniteScroll()` 走到这里，
+     * 无条件重写会摧毁用户正要点的那个节点（连焦点一起）——所以内容一致时必须
+     * 安静返回。
+     *
+     * 但反过来，只因为「已经有一枚按钮」就无条件返回是错的：那会让文案永远停在
+     * 第一次渲染的那一版上。真实发生过的一条路径是「自动加载失败留下 HTTP 503 →
+     * 用户关掉开关想手动点」：按钮还是同一枚、还是同一个 loadNextPage()，语义却
+     * 从「重试上次失败」变成了「再要一页」，文案必须跟着换，否则用户会拿着一个
+     * 已经过时的状态码去报障。状态码刷新（503 → 重试 → 500）同理。
+     */
+    const current = sentinel.firstElementChild;
+    const currentIsButton = current instanceof HTMLButtonElement;
+    const alreadyRendered =
+      current !== null &&
+      currentIsButton === withButton &&
+      current.textContent === message &&
+      (currentIsButton ? current.classList.contains('fwe-infinite-loader') : true);
+    if (alreadyRendered) return;
+    sentinel.innerHTML = '';
+    if (!withButton) {
+      sentinel.append(element('div', 'fwe-infinite-end', message));
+      return;
+    }
+    const button = element('button', 'fwe-infinite-loader', message);
+    button.type = 'button';
+    button.style.cursor = 'pointer';
+    button.addEventListener('click', () => void this.loadNextPage());
+    sentinel.append(button);
+  }
+
   private applyInfiniteScroll(enabled: boolean): void {
     this.infiniteSwitchButton.setAttribute('aria-checked', String(enabled));
+    // `.post-navigation` also carries `.navigation`, but it links the previous/next
+    // single post rather than paginating a list, so it must stay reachable.
     const nav = document.querySelector<HTMLElement>(
-      '#content > .navigation, #content > .paging-navigation',
+      '#content > .navigation:not(.post-navigation), #content > .paging-navigation',
     );
     const sentinel = document.querySelector<HTMLElement>('#content > .fwe-infinite-sentinel');
     if (enabled && this.mode === 'enhanced') {
-      if (nav) nav.style.display = 'none';
+      // Hiding the nav goes through the transaction as a class rather than a raw
+      // inline `style.display`: the nav is a node `move()` relocated, and an
+      // inline write would outlive `restore()` and leave pagination hidden after
+      // returning to the original layout.
+      if (nav) this.transaction?.addClass(nav, 'fwe-source-hidden');
       if (sentinel) sentinel.style.display = '';
       this.setupInfiniteScroll();
     } else {
-      if (nav) nav.style.display = '';
-      if (sentinel) sentinel.style.display = 'none';
+      if (nav) nav.classList.remove('fwe-source-hidden');
+      /*
+       * M4：关掉自动加载不等于撤掉退路。哨兵以前被 `display:none` 掉，用户只剩
+       * 翻原站分页这一条路——而 research 要的恰恰是「随时能再要一页」。现在它
+       * 端出一枚「加载更多」按钮，点的还是同一个 `loadNextPage()`。
+       *
+       * 只在 enhanced 模式下摆这个按钮：original 模式下哨兵根本不存在（它本身
+       * 就是交易节点），保持 `display:none` 让 `restore()` 之后不留残影。
+       */
+      if (sentinel && this.mode === 'enhanced') {
+        sentinel.style.display = '';
+        this.renderSentinelMessage(sentinel, t('infiniteLoadMore'), true);
+      } else if (sentinel) {
+        sentinel.style.display = 'none';
+      }
       this.infiniteObserver?.disconnect();
       this.infiniteObserver = null;
     }
@@ -2633,6 +2992,8 @@ export class FitGirlEnhancedApp {
     });
     this.initRatingObserver();
     this.prepareNavigation();
+    this.localizePostNavigation();
+    this.prepareSiteExtras();
     this.processArticles();
     this.observeChanges();
     this.observeVideos();
@@ -2647,7 +3008,7 @@ export class FitGirlEnhancedApp {
     this.gameModal.close();
     this.ratingObserver?.disconnect();
     this.ratingObserver = null;
-    this.ratingPopover.hide(0);
+    this.ratingPopover.hide();
     this.observer?.disconnect();
     this.observer = null;
     this.videoObserver?.disconnect();
@@ -2677,6 +3038,222 @@ export class FitGirlEnhancedApp {
     });
   }
 
+  /**
+   * 主题把上一篇/下一篇的标签写死成英文（Previous Post / Next Post），中文界面里
+   * 会露出英文。这里按 rel 属性本地化两枚 `.meta-nav`，并各补一枚方向箭头图标；
+   * 链接里的标题文本不归我们管，保持原样。标签文本与箭头都交由 DomTransaction
+   * 记录，切回原站模式时会被一并还原。
+   */
+  private localizePostNavigation(): void {
+    const transaction = this.transaction;
+    if (!transaction) return;
+    const links = document.querySelector<HTMLElement>('#content > .post-navigation .nav-links');
+    if (!links) return;
+    const entries = [
+      { rel: 'prev', label: 'prevPost', icon: 'chevronLeft' },
+      { rel: 'next', label: 'nextPost', icon: 'chevronRight' },
+    ] as const;
+    entries.forEach(({ rel, label: key, icon }) => {
+      const link = links.querySelector<HTMLAnchorElement>(`a[rel="${rel}"]`);
+      const metaNav = link?.querySelector<HTMLElement>('.meta-nav');
+      if (!link || !metaNav) return;
+      const label = document.createTextNode(t(key));
+      transaction.setChildren(metaNav, [label]);
+      if (rel === 'prev') this.navPrevLabel = label;
+      else this.navNextLabel = label;
+      const arrow = createIcon(icon, 'fwe-nav-arrow');
+
+      /*
+       * 把标题（<a> 里的裸文本节点）单独包进 .fwe-nav-title，让「标签/箭头」
+       * 与「标题」分成两块：CSS 的 2 行 clamp 只能落在标题块上。原先 clamp 在
+       * 整个 <a> 上，标签占掉第 1 行，标题只剩 1 行就被省略号截断（用户报的
+       * 文字遮挡）。用 setChildren 一次性重建并记录原始 children，切回原站
+       * 模式时 restore() 会把裸文本节点原样放回，不留 span 残渣。
+       */
+      const titleText = [...link.childNodes]
+        .filter((node): node is Text => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent ?? '')
+        .join('')
+        .trim();
+      const title = element('span', 'fwe-nav-title', titleText);
+      // next 的箭头在标签之后、标题之前；prev 的箭头紧跟标签。两者都是
+      // metaNav → arrow → title，视觉上 prev 的箭头指向左、next 指向右。
+      transaction.setChildren(link, [metaNav, arrow, title]);
+    });
+  }
+
+  /**
+   * The enhanced layout hides the theme sidebars and footer, which would also
+   * hide content that has no enhanced replacement: the scam warning, the
+   * support / RSS / newsletter widgets and the footer's "Today's Most Popular
+   * Repacks" grid. Relocate that content into a section appended to `#main` so
+   * nothing from the original page is lost, and so `DomTransaction` can put it
+   * back when the user returns to the original layout.
+   */
+  private prepareSiteExtras(): void {
+    const transaction = this.transaction;
+    if (!transaction || document.querySelector('.fwe-site-extras')) return;
+    const main = document.querySelector<HTMLElement>('#main');
+    const sidebar = document.querySelector<HTMLElement>('#primary-sidebar');
+    const footerWidget = document.querySelector<HTMLElement>('#block-6');
+    if (!main || (!sidebar && !footerWidget)) return;
+
+    const widgets = sidebar
+      ? [...sidebar.children].filter(
+          (child): child is HTMLElement =>
+            child instanceof HTMLElement &&
+            child.matches('aside.widget, .widget') &&
+            // Monthly archives are already reachable through the Browse dialog
+            !child.classList.contains('widget_archive'),
+        )
+      : [];
+    const popularTiles = parsePopularItems(footerWidget);
+    const notice = document.querySelector<HTMLElement>(
+      '#secondary .site-description, .site-description',
+    );
+    if (widgets.length === 0 && popularTiles.length === 0 && !notice) return;
+
+    const section = element('section', 'fwe-site-extras');
+    /*
+     * 详情页评论区（Tolstoy 插件 iframe）会从 ~200px 长到近 10000px。它每长
+     * 一寸都把下方内容踹飞一次——实测 CLS 0.751。插到评论区前面可以消除抖动；
+     * 列表页没有评论区锚点，走 else 分支保持原有行为（挂到 #main 末尾）。
+     */
+    const commentsAnchor = [
+      document.querySelector<HTMLElement>('#content > div[data-source-theme="tolstoycomments"]'),
+      document.querySelector<HTMLElement>('#content > .tolstoycomments-feed'),
+      document.querySelector<HTMLElement>('#content > #comments'),
+    ].find((node): node is HTMLElement => node !== null && node.parentElement !== null);
+    const commentsParent = commentsAnchor?.parentElement ?? null;
+    if (commentsAnchor instanceof HTMLElement && commentsParent) {
+      transaction.insert(section, commentsParent, commentsAnchor);
+    } else {
+      transaction.insert(section, main);
+    }
+
+    if (notice) {
+      const block = element('div', 'fwe-extras-block fwe-extras-notice');
+      transaction.move(notice, block);
+      transaction.addClass(notice, 'fwe-extras-notice__text');
+      section.append(block);
+    }
+
+    /*
+     * 捐赠 / RSS / 订阅 / OST 四个 widget 合并成一条页脚带。它们本来各自是一张
+     * `.fwe-extras-block` 卡片，四张等权卡片等于宣布「这是四段内容」；而按设计
+     * 只有防伪警示和今日热门值得那个重量。所以这里只建一个 block，每个 widget
+     * 成为带内的一格——`relocateWidget()` 的移动逻辑完全不变，只是外层容器换了，
+     * 还原时自然也跟着回到 `#primary-sidebar`。
+     */
+    const strip = element('div', 'fwe-extras-block fwe-extras-block--strip');
+    for (const widget of widgets) {
+      const cell = element('div', 'fwe-extras-strip__cell');
+      this.relocateWidget(widget, cell);
+      if (cell.childElementCount > 0) strip.append(cell);
+    }
+
+    if (popularTiles.length > 0 && footerWidget) {
+      const block = element('div', 'fwe-extras-block fwe-extras-block--wide');
+      const heading = footerWidget.querySelector<HTMLElement>('.widgettitle, .widget-title');
+      if (heading) {
+        transaction.move(heading, block);
+        transaction.addClass(heading, 'fwe-extras-block__title');
+      }
+      // The widget ships theme rules (floats, fixed widths) that would break the grid
+      footerWidget.querySelectorAll('style').forEach((style) => {
+        transaction.setAttribute(style, 'media', 'not all');
+      });
+      const grid = element('div', 'fwe-directory-grid');
+      popularTiles.forEach((item) => {
+        const tile = element('a', 'fwe-directory-tile');
+        tile.href = item.href;
+        tile.title = item.title;
+        const image = element('img');
+        image.src = item.imageUrl ?? '';
+        image.alt = '';
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        tile.append(image, element('span', 'fwe-directory-tile__title', item.title));
+        grid.append(tile);
+      });
+      block.append(grid);
+      section.append(block);
+    }
+
+    // 带子本身横跨整个 extras 网格，而不是占一个 16rem 的自动填充轨道。
+    // 它排在热门之后：热门的今日内容在前，捐赠/RSS/订阅/OST 是站点 chrome。
+    if (strip.childElementCount > 0) {
+      section.append(strip);
+      this.prepareOstTiles(strip);
+    }
+  }
+
+  /**
+   * 把带子里的每个 YouTube embed 换成一张点击才加载的海报瓦片。
+   *
+   * iframe 留在原位，但它的 `src` 在 boot 时就被撤掉：脚本以 `document-start`
+   * 注册、在 `DOMContentLoaded` 执行，此刻播放器文档与 JS 通常还在传输中，
+   * 撤掉 `src` 能取消这段在途加载——`display: none` 做不到这一点，隐藏的
+   * iframe 照样会连出去。点击瓦片时把原 `src` 直接写回（不走 transaction，
+   * 否则会留下第二条属性记录、restore 时二次写同一个值）；`restore()` 则按
+   * transaction 里记录的原值写回逐字相同的 `src`。
+   *
+   * 已知副作用：点击后播放器从零加载（约 1s）；点击播放后再切回原站模式，
+   * restore 重写相同的 `src` 会被浏览器当成新导航，播放进度丢失。
+   */
+  private prepareOstTiles(strip: HTMLElement): void {
+    const transaction = this.transaction;
+    if (!transaction) return;
+    strip.querySelectorAll('iframe').forEach((frame) => {
+      const id = /youtube\.com\/embed\/([\w-]{11})/.exec(frame.getAttribute('src') ?? '')?.[1];
+      if (!id) return;
+      const host = frame.parentElement;
+      if (!host) return;
+      // 命中正则时必然有 src，但按 `string | null` 处理，避免写回一个空串。
+      const originalSrc = frame.getAttribute('src');
+
+      const tile = element('button', 'fwe-ost-tile');
+      tile.type = 'button';
+      tile.setAttribute('aria-label', t('ostPlayAria'));
+      tile.title = t('ostPlayTitle');
+      const poster = element('img', 'fwe-ost-tile__poster');
+      poster.src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+      poster.loading = 'lazy';
+      poster.decoding = 'async';
+      poster.alt = '';
+      const play = element('span', 'fwe-ost-tile__play');
+      play.append(createIcon('play'));
+      tile.append(poster, play);
+      tile.addEventListener('click', () => {
+        tile.remove();
+        if (originalSrc !== null) frame.setAttribute('src', originalSrc);
+        frame.classList.remove('fwe-ost-pending');
+      });
+
+      transaction.insert(tile, host, frame);
+      transaction.addClass(frame, 'fwe-ost-pending');
+      transaction.setAttribute(frame, 'src', null);
+      const cell = frame.closest('.fwe-extras-strip__cell');
+      if (cell) transaction.addClass(cell, 'fwe-extras-strip__cell--ost');
+    });
+  }
+
+  /** Moves a widget's own heading and body into an extras block. */
+  private relocateWidget(widget: HTMLElement, block: HTMLElement): void {
+    const transaction = this.transaction;
+    if (!transaction) return;
+    const heading = widget.querySelector<HTMLElement>('.widgettitle, .widget-title');
+    if (heading) {
+      transaction.move(heading, block);
+      transaction.addClass(heading, 'fwe-extras-block__title');
+    }
+    [...widget.children].forEach((child) => {
+      // Theme stylesheets stay inside the (hidden) widget instead of following the content
+      if (child === heading || !(child instanceof HTMLElement) || child.matches('style')) return;
+      transaction.move(child, block);
+    });
+  }
+
   private processArticles(): void {
     if (!this.transaction || this.processing) return;
     this.processing = true;
@@ -2703,6 +3280,16 @@ export class FitGirlEnhancedApp {
     const cardsToLayout: HTMLElement[] = [];
 
     for (const root of articles) {
+      /*
+       * M6：顺手把遍历到的文章 id 收进增量集合。这一步本来就要遍历全部文章，
+       * 所以增量维护的边际成本是零——省下的是 `loadNextPage()` 里每次重建
+       * 全量 Set 的那次 `querySelectorAll`。
+       *
+       * 与旧实现的语义完全一致：旧代码取的是文档里全部 `article.hentry` 的 id，
+       * 这里收的也是同一个 `articles` 数组（同一条选择器）。
+       */
+      if (root.id) this.loadedArticleIds.add(root.id);
+
       const isTransformed = root.hasAttribute('data-fwe-ready');
       let kind: ArticleKind = 'special';
       if (!isTransformed) {
@@ -2788,6 +3375,14 @@ export class FitGirlEnhancedApp {
 
       if (!stream) {
         stream = element('div', 'fwe-stream');
+        /*
+         * M6：新建流意味着这批文章节点是全新的（切模式回来时 `restore()` 已把
+         * 旧的连 id 一起撤掉）。此刻必须用当前文章的 id 重新播种，否则增量集合
+         * 里残留的旧 id 会让下一页被判成「全部重复」而一篇不插——内容凭空消失。
+         */
+        this.loadedArticleIds = new Set(
+          articles.map((a) => a.id).filter((id): id is string => Boolean(id)),
+        );
         this.transaction.insert(stream, content, streamAnchor);
       } else if (stream.previousElementSibling !== (upcomingArticle ?? pageHeader)) {
         content.insertBefore(stream, streamAnchor);
@@ -2799,29 +3394,6 @@ export class FitGirlEnhancedApp {
       // Strict Row-Aligned Grid:
       // Cards are direct children of .fwe-stream and ordered left-to-right, row-by-row
       cardsToLayout.forEach((card, index) => {
-        const header = card.querySelector<HTMLElement>('.entry-header');
-        if (header) {
-          const badge = header.querySelector<HTMLElement>('.fwe-order-badge');
-          const expectedBadgeText = `#${index + 1}`;
-          const expectedRank = String(index + 1);
-          if (badge) {
-            if (badge.textContent !== expectedBadgeText) {
-              badge.textContent = expectedBadgeText;
-            }
-            if (badge.getAttribute('data-rank') !== expectedRank) {
-              badge.setAttribute('data-rank', expectedRank);
-            }
-          } else {
-            const newBadge = element('span', 'fwe-order-badge', expectedBadgeText);
-            newBadge.setAttribute('data-rank', expectedRank);
-            this.transaction?.insert(newBadge, header, header.firstChild);
-          }
-        }
-        const expectedRank = index < 3 ? String(index + 1) : null;
-        if (card.getAttribute('data-fwe-rank') !== expectedRank) {
-          this.transaction?.setAttribute(card, 'data-fwe-rank', expectedRank);
-        }
-
         if (card.parentElement !== stream) {
           this.transaction?.move(card, stream);
         } else if (stream.children[index] !== card) {
@@ -2833,6 +3405,14 @@ export class FitGirlEnhancedApp {
       let sentinel = content.querySelector<HTMLElement>(':scope > .fwe-infinite-sentinel');
       if (!sentinel) {
         sentinel = element('div', 'fwe-infinite-sentinel');
+        /*
+         * M5：整个信息流只有一个状态播报口，就是这里。`role="status"` 自带
+         * `aria-live="polite"`，但两个都显式写上——读屏软件对隐式 live region
+         * 的支持并不整齐。四种状态（加载中 / 已加载一页 / 失败 / 已全部加载）
+         * 都往这个节点里写文字，所以换语言、换文案都不用动这行。
+         */
+        sentinel.setAttribute('role', 'status');
+        sentinel.setAttribute('aria-live', 'polite');
         this.transaction.insert(sentinel, content, stream.nextSibling);
       } else if (stream && sentinel.previousElementSibling !== stream) {
         content.insertBefore(sentinel, stream.nextSibling);
@@ -2847,6 +3427,16 @@ export class FitGirlEnhancedApp {
 
       // Apply infinite scroll state based on user preferences
       this.applyInfiniteScroll(this.infiniteScroll);
+
+      /*
+       * M2：刷新后静默补齐到记忆中的页数。放在这里是因为补齐要跟着分页导航的
+       * next 链接一页页走，而导航就是上面几行刚排好的。
+       *
+       * 只在无限滚动开着时补：用户显式关掉自动加载，却在刷新后被静默抓一堆
+       * 页面，违背的是他们自己的偏好。关着的时候位置仍然不丢——URL 已同步，
+       * 打开开关后哨兵会继续往下加载。
+       */
+      if (this.infiniteScroll) void this.restoreRememberedPages();
     }
 
     this.processing = false;
@@ -2949,8 +3539,37 @@ export class FitGirlEnhancedApp {
     this.infiniteObserver.observe(sentinel);
   }
 
-  private async loadNextPage(): Promise<void> {
-    if (this.loadingNextPage || !this.hasNextPage || !this.infiniteScroll) return;
+  /**
+   * M2：刷新后静默补齐到 sessionStorage 记住的页数。
+   *
+   * 每次文档加载只尝试一次（`pagesRestoreStarted`），切模式不重复补——回到
+   * original 会把加载过的页面连同增强一起撤掉，那时再补一次只会白白抓一遍。
+   * 一轮没能推进就停：死循环比少一页更糟。
+   */
+  private async restoreRememberedPages(): Promise<void> {
+    if (this.pagesRestoreStarted) return;
+    this.pagesRestoreStarted = true;
+
+    const target = readRememberedPageCount();
+    while (
+      this.loadedPageCount < target &&
+      this.hasNextPage &&
+      this.mode === 'enhanced' &&
+      this.infiniteScroll
+    ) {
+      const before = this.loadedPageCount;
+      await this.loadNextPage({ silent: true });
+      if (this.loadedPageCount === before) break;
+    }
+  }
+
+  /**
+   * `silent` 只给刷新后的静默补齐用：不渲染骨架、不占 loadingNextPage 之外的
+   * 任何用户可见状态。手动点击与哨兵自动触发都不传它。
+   */
+  private async loadNextPage(options: { silent?: boolean } = {}): Promise<void> {
+    const { silent = false } = options;
+    if (this.loadingNextPage || !this.hasNextPage) return;
 
     // Search for next page link in standard pagination
     const nextLink = document.querySelector<HTMLAnchorElement>(
@@ -2970,17 +3589,48 @@ export class FitGirlEnhancedApp {
     const sentinel = document.querySelector<HTMLElement>('#content > .fwe-infinite-sentinel');
     if (sentinel) {
       sentinel.innerHTML = '';
-      const loader = element('div', 'fwe-infinite-loader');
-      loader.append(
-        element('span', 'fwe-infinite-loader__spinner'),
-        document.createTextNode(t('infiniteLoading')),
-      );
-      sentinel.append(loader);
+      /*
+       * 静默补齐不渲染骨架：用户刷新是为了回到原来的位置，不是为了再看一次
+       * 加载动画。骨架仍然是手动滚动与首次自动加载的进度指示。
+       */
+      if (!silent) {
+        // The skeleton is a generated node like any other, so returning to the
+        // original layout takes it with the rest of the enhancements.
+        const skeleton = createSkeletonGrid(this.computeColumnCount());
+        if (this.transaction) {
+          this.transaction.insert(skeleton, sentinel);
+        } else {
+          sentinel.append(skeleton);
+        }
+      }
     }
 
+    /*
+     * M3：把哨兵上的失败 / 结束文案收敛到一处。三档共用同一套骨架，差别只在
+     * 「有没有退路」——网络与 HTTP 失败留重试按钮，空结果不留：没有东西可重试，
+     * 留一个按钮只会骗用户再发一次同样的请求。
+     */
+    const renderSentinelMessage = (message: string, withRetry: boolean): void => {
+      this.renderSentinelMessage(sentinel, message, withRetry);
+    };
+
+    let insertedCount = 0;
     try {
       const response = await fetch(nextLink.href, { credentials: 'same-origin' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        /*
+         * M3 第二级：响应回来了但状态码不对。文案带上状态码——用户截图报障时
+         * 「HTTP 503」比「加载失败」有用得多。留重试：503 多半是站点临时抽风。
+         *
+         * warn 只发一条、只带 URL 与状态码，不带错误对象：429 回退链的教训是
+         * warn 太吵，一个错误刷一屏等于没有日志。
+         */
+        console.warn(
+          `[fitgirl-web-enhanced] infinite scroll: HTTP ${response.status} for ${nextLink.href}`,
+        );
+        renderSentinelMessage(t('infiniteErrorHttp', { status: response.status }), true);
+        return;
+      }
       const htmlText = await response.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
@@ -2990,31 +3640,64 @@ export class FitGirlEnhancedApp {
         ...doc.querySelectorAll<HTMLElement>('#content article.hentry, article.hentry'),
       ];
 
-      // Filter out existing cards
-      const existingIds = new Set(
-        [...document.querySelectorAll<HTMLElement>('article.hentry')]
-          .map((a) => a.id)
-          .filter(Boolean),
-      );
+      /*
+       * M6：去重改用增量集合，不再每次 `querySelectorAll('article.hentry')`
+       * 重建全量 Set。集合由 `processArticles()` 在本来就要走的遍历里顺手累积，
+       * 并在 `.fwe-stream` 新建时（切模式回来）重新播种——所以它始终等于「当前
+       * 文档里全部文章的 id」，与旧实现语义一致，只是不再随页数线性重建。
+       */
+      const existingIds = this.loadedArticleIds;
       const incomingArticles = newArticles.filter((a) => !a.id || !existingIds.has(a.id));
 
+      /*
+       * M3 第三级：这一页没有新文章。这多半是列表真的到底了（WordPress 有时会把
+       * 最后一页的内容重复服务一次），也可能是缓存页 / 置顶重复——一次响应区分
+       * 不了两者，所以统一按「结束」处理：不再重试，也不再往下抓。
+       *
+       * 空结果不是错误：不写 warn，也不留重试按钮。
+       */
+      if (incomingArticles.length === 0) {
+        this.hasNextPage = false;
+        renderSentinelMessage(t('infiniteErrorEmpty'), false);
+        return;
+      }
+
       const content = document.querySelector<HTMLElement>('#content');
+      const transaction = this.transaction;
       if (content && incomingArticles.length > 0) {
-        const frag = document.createDocumentFragment();
         for (const art of incomingArticles) {
           if (
-            !art.matches(
+            art.matches(
               '.fwe-upcoming, .category-upcoming, .fwe-directory-popular, .fwe-directory-az, .fwe-directory-updates',
             )
           ) {
-            frag.append(art);
+            continue;
           }
+          // Loaded pages are content we generated, so they go through the
+          // transaction: `disableEnhanced()` must be able to remove them again
+          // when the user returns to the original layout.
+          if (transaction) {
+            transaction.insert(art, content, sentinel);
+          } else {
+            content.insertBefore(art, sentinel);
+          }
+          insertedCount += 1;
         }
-        if (sentinel) {
-          content.insertBefore(frag, sentinel);
-        } else {
-          content.append(frag);
-        }
+      }
+
+      /*
+       * M2：URL 同步 + 页数记忆，只在真的推进了内容时做。
+       *
+       * `replaceState` 而不是 `pushState`：后者会把每一页塞进浏览器历史，用户按
+       * 后退只会在我们自己的条目里打转；而「可分享、刷新不丢位置」这两个核心
+       * 价值 replaceState 已经给全了。URL 直接用 WordPress 分页链接给出的
+       * `nextLink.href`，不用自己拼。页数写进 sessionStorage，刷新后按它静默
+       * 补齐——一次都没推进（空结果 / 全是重复卡）就不动这两个状态。
+       */
+      if (insertedCount > 0) {
+        this.loadedPageCount += 1;
+        writeRememberedPageCount(this.loadedPageCount);
+        window.history.replaceState(null, '', nextLink.href);
       }
 
       // Update pagination navigation with next page links
@@ -3025,29 +3708,64 @@ export class FitGirlEnhancedApp {
         '#content > .navigation, #content > .paging-navigation',
       );
       if (newNav && currentNav) {
-        currentNav.innerHTML = newNav.innerHTML;
+        // The live nav is a node the transaction moved, so swapping its
+        // children has to go through `setChildren` — a bare `innerHTML`
+        // assignment would survive `restore()` and strand the user on the
+        // pagination markup of whatever page they happened to scroll to.
+        this.transaction?.setChildren(currentNav, [...newNav.childNodes]);
       } else if (!doc.querySelector('#content .nav-links a.next')) {
         this.hasNextPage = false;
       }
 
-      if (sentinel) {
+      /*
+       * M5：成功落地后播报「加载了第几页」。sentinel 是 `role="status"` 区域，
+       * 这段文字就是读屏用户唯一能拿到的进度反馈——没有它，内容悄悄变了，
+       * 他们只会以为页面卡住。
+       *
+       * 只在真的推进了内容时写：`insertedCount === 0` 的路径已经在上面按空结果
+       * 处理掉了，走不到这里。
+       */
+      if (sentinel && insertedCount > 0) {
         sentinel.innerHTML = '';
+        sentinel.append(
+          element('div', 'fwe-infinite-end', t('infiniteLoaded', { page: this.loadedPageCount })),
+        );
       }
     } catch {
-      if (sentinel) {
-        sentinel.innerHTML = '';
-        const retryBtn = element('button', 'fwe-infinite-loader', t('infiniteRetry'));
-        retryBtn.style.cursor = 'pointer';
-        retryBtn.addEventListener('click', () => void this.loadNextPage());
-        sentinel.append(retryBtn);
-      }
+      /*
+       * M3 第一级：fetch 直接 reject（断网 / DNS / 跨域被拦）。这是唯一一种用户
+       * 「自己能修」的失败，所以文案指向连接，并且留重试。
+       *
+       * warn 只发一条、只带 URL，不绑定错误对象：错误对象会带 stack，一个网络
+       * 失败的 stack 对定位毫无帮助，只是噪音。
+       */
+      console.warn(
+        `[fitgirl-web-enhanced] infinite scroll: network request failed for ${nextLink.href}`,
+      );
+      renderSentinelMessage(t('infiniteErrorNetwork'), true);
     } finally {
       this.loadingNextPage = false;
       if (this.observerTimer !== null) {
         window.clearTimeout(this.observerTimer);
         this.observerTimer = null;
       }
+      /*
+       * M6 验证结论：这一行**不是**冗余的，已实测删除后三处破裂——
+       *   1. 新插入的文章不会被改造成卡片（只能等 MutationObserver 的 100ms
+       *      防抖，那 100ms 里用户看到的是未经改造的原始文章）；
+       *   2. `applyInfiniteScroll()` 不再重跑，M4 的「加载更多」按钮不回来；
+       *   3. M5 的「Loaded page N」播报被按钮文案覆盖掉。
+       * 另外它在这里还顺手取消掉了观察器的防抖计时器（上面几行），所以两边的
+       * 触发不会重复跑一遍全量遍历。留着。
+       */
       this.processArticles();
+      /*
+       * 问题 3：Tolstoy 插件只在 init 时用 getElementsByClassName 填充一次
+       * `.tolstoycomments-cc`，无限滚动插入的新卡永远空着。插件把活的 Comment
+       * 实例挂在队列对象上，update() 会重新扫描全文档并按 URL 去重——这里按
+       * 本页真的插入了文章才补齐：空结果与失败路径不白跑一趟第三方请求。
+       */
+      if (insertedCount > 0) refillThirdPartyCommentCounts();
     }
   }
 }

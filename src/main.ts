@@ -1,8 +1,10 @@
 import './style.css';
 import {
+  DEFAULT_THEME,
   getFastStoredLanguage,
   getFastStoredLayoutMode,
   getFastStoredShowRatings,
+  getFastStoredTheme,
 } from './preferences';
 import { detectBrowserLanguage, setActiveLanguage } from './i18n';
 import { FitGirlEnhancedApp } from './ui';
@@ -11,6 +13,10 @@ import { FitGirlEnhancedApp } from './ui';
 function syncPreloadState(): void {
   if (window.top !== window.self) return;
   try {
+    // Theme is written before the mode: the palette block is what the mode's
+    // own background rules read, and writing it second would let the page paint
+    // one light frame before flipping.
+    document.documentElement.dataset.fweTheme = getFastStoredTheme();
     const fastMode = getFastStoredLayoutMode();
     document.documentElement.dataset.fweMode = fastMode;
     const fastRatings = getFastStoredShowRatings();
@@ -19,6 +25,7 @@ function syncPreloadState(): void {
     document.documentElement.dataset.fweLang = fastLang;
     setActiveLanguage(fastLang);
   } catch {
+    document.documentElement.dataset.fweTheme = DEFAULT_THEME;
     document.documentElement.dataset.fweMode = 'enhanced';
     document.documentElement.dataset.fweShowRatings = 'true';
     document.documentElement.dataset.fweLang = 'en';

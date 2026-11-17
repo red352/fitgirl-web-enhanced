@@ -112,6 +112,18 @@ export interface StoredLanguagePreference {
   updatedAt: number;
 }
 
+/**
+ * `system` is not a resolved colour: it is the instruction to follow the OS.
+ * The stylesheet answers it with `color-scheme: light dark` plus a
+ * `prefers-color-scheme` token block, so a system flip never runs our script.
+ */
+export type ThemeMode = 'light' | 'dark' | 'system';
+
+export interface StoredThemePreference {
+  theme: ThemeMode;
+  updatedAt: number;
+}
+
 export interface GameRatingData {
   appId: number;
   name: string;
@@ -137,4 +149,6 @@ export interface AttributeRestoreRecord {
   name: string;
   existed: boolean;
   value: string | null;
+  /** Position among the element's attributes, so a removed one lands back in place. */
+  index: number | null;
 }

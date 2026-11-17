@@ -20,6 +20,8 @@ const paths: Record<string, string> = {
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   calendar: '<path d="M5 4h14v16H5zM8 2v4m8-4v4M5 9h14"/>',
+  comment: '<path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3.5 21l1.9-5.2A8.5 8.5 0 1 1 21 11.5Z"/>',
+  user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   tag: '<path d="M4 4h7l9 9-7 7-9-9z"/><circle cx="8" cy="8" r="1"/>',
   building: '<path d="M5 21V6l7-3 7 3v15M9 8h1m4 0h1M9 12h1m4 0h1M9 16h1m4 0h1M3 21h18"/>',
   language: '<path d="M4 5h9M8.5 3v2c0 5-2 8-5 10m3-6c1 2 3 4 6 5M14 19l3.5-9 3.5 9m-5.8-3h4.6"/>',
@@ -34,6 +36,7 @@ const paths: Record<string, string> = {
     '<path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>',
   trash: '<path d="M4 7h16M9 7V4h6v3m-8 0 1 14h8l1-14M10 11v6m4-6v6"/>',
   arrowUp: '<path d="m5 14 7-7 7 7M12 7v13"/>',
+  play: '<polygon points="7 4 20 12 7 20 7 4"/>',
   spinner: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
 };
 

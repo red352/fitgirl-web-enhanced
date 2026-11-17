@@ -1,12 +1,17 @@
 import {
+  archiveListingContent,
   azPageArticle,
+  commentsSection,
   digestArticle,
   fullPage,
   gameArticle,
   pinkPawGameArticle,
   popularPageArticle,
   popularWidget,
+  postNavigation,
+  siteFooterExtras,
   siteHeader,
+  siteSidebarExtras,
   updatesPageArticle,
 } from '../fixtures';
 
@@ -65,32 +70,80 @@ for (const [key, value] of Object.entries(ratingSeed)) {
 
 const view = new URLSearchParams(window.location.search).get('page') ?? 'home';
 const pageMarkup: Record<string, { bodyClass: string; content: string }> = {
-  single: { bodyClass: 'single single-post', content: gameArticle },
+  single: {
+    bodyClass: 'single single-post',
+    content: `${gameArticle}${postNavigation}${commentsSection}`,
+  },
   pink: {
     bodyClass: 'single single-post category-lossless-repack category-pink-paw-award',
-    content: pinkPawGameArticle,
+    content: `${pinkPawGameArticle}${postNavigation}${commentsSection}`,
   },
   digest: { bodyClass: 'single single-post category-updates-digest', content: digestArticle },
   popular: { bodyClass: 'page page-template-default', content: popularPageArticle },
   az: { bodyClass: 'page page-template-default', content: azPageArticle },
   updates: { bodyClass: 'page page-template-default', content: updatesPageArticle },
   archive: {
-    bodyClass: 'archive date',
+    bodyClass: 'archive date list-view',
     content: `<header class="page-header"><h1 class="page-title">Monthly Archives: August 2026</h1></header>${gameArticle}${gameArticle.replaceAll('Sample Game', 'Archive Game')}`,
   },
+  // 带分页导航的归档流：无限滚动会去抓 /page/2/，用于验证加载骨架屏
+  paged: {
+    bodyClass: 'archive date list-view',
+    content: `<header class="page-header"><h1 class="page-title">Monthly Archives: August 2026</h1></header>${archiveListingContent}`,
+  },
   search: {
-    bodyClass: 'search search-results',
+    bodyClass: 'search search-results list-view',
     content: `<header class="page-header"><h1 class="page-title">Search Results for: sample</h1></header>${gameArticle.replaceAll('entry-content', 'entry-summary')}${gameArticle.replaceAll('entry-content', 'entry-summary').replaceAll('Sample Game', 'Search Result Game')}`,
   },
 };
 const selected = pageMarkup[view];
 if (selected) {
   document.body.className = selected.bodyClass;
-  document.body.innerHTML = `${siteHeader}<div id="page"><main id="main"><div id="primary"><div id="content">${selected.content}</div></div></main>${popularWidget}</div>`;
+  document.body.innerHTML = `${siteHeader}<div id="page"><main id="main"><div id="primary"><div id="content" class="site-content">${selected.content}</div></div>${siteSidebarExtras}</main>${popularWidget}${siteFooterExtras}</div>`;
 } else {
-  document.body.className = 'home blog';
+  // 复现真实站点首页：≤400px 时主题切到 list-view 紧凑列表并隐藏 .entry-content
+  document.body.className = 'home blog list-view';
   document.body.innerHTML = fullPage;
 }
+
+/*
+ * 复刻主题 twentyfourteen-fg 在 `@media screen and (max-width: 400px)` 下的规则：
+ * 真实站点首页/搜索/归档页会带 body.list-view，并以 (0,4,0) 特异性隐藏
+ * .entry-content/.entry-summary。增强模式必须覆盖它，否则移动端卡片只剩标题、
+ * upcoming 区块塌成空壳（该 bug 只在真实站点出现，unit fixture 无法复现）。
+ */
+const themeListViewController = document.createElement('style');
+themeListViewController.id = 'fwe-theme-list-view';
+themeListViewController.textContent = `
+  @media screen and (max-width: 400px) {
+    .list-view .site-content .type-post .entry-content,
+    .list-view .site-content .type-page .entry-content,
+    .list-view .site-content .type-post .entry-summary,
+    .list-view .site-content .type-page .entry-summary {
+      display: none;
+    }
+  }
+`;
+document.head.append(themeListViewController);
+
+/*
+ * 复刻 twentyfourteen-fg 给 `.site-content .entry-header/.entry-content` 写死的
+ * `background-color:#fff`（真实站点 style.css:1171 / 1303，特异性 (0,2,0)）。
+ * 之前 fixture 没有这条，暗色快照一直是干净的，掩盖了一个线上 bug：我们的
+ * 中和规则若用 `:where(...)`（特异性 (0,1,1)）会被这条压过，暗色下卡片内部变成
+ * 白底 + 浅字。注入后 e2e 的「白底必须被中和」断言才真正覆盖线上场景。
+ * JS 写的内联 <style> 在用户脚本 GM_addStyle 之前执行（脚本 run-at document-idle），
+ * 所以下面这条先入场、用户的 CSS 后入场，胜负纯看特异性，与线上一致。
+ */
+const themeWhiteBackgrounds = document.createElement('style');
+themeWhiteBackgrounds.id = 'fwe-theme-white-backgrounds';
+themeWhiteBackgrounds.textContent = `
+  .site-content .entry-header { background-color: #fff; }
+  .site-content .entry-content,
+  .site-content .entry-summary,
+  .page-content { background-color: #fff; }
+`;
+document.head.append(themeWhiteBackgrounds);
 
 const assets = [
   '/test/e2e/assets/cover.svg',

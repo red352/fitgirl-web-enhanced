@@ -254,12 +254,27 @@ function detectArticleKind(title: string, infoBlock: HTMLElement | null): Articl
   return infoBlock ? 'game' : 'special';
 }
 
+/**
+ * Reads a card title, ignoring decorations this script injected into it.
+ *
+ * The pink paw award badge is rendered inside `.entry-title` so it can sit beside
+ * the name it belongs to. The parsed title, however, is the identity of the post:
+ * it keys the rating cache, the rating container's `data-title`, and several
+ * aria-labels. Letting badge text leak in would silently fork every one of those.
+ */
+function parseTitleText(titleElement: HTMLElement | null): string {
+  if (!titleElement) return '';
+  const source = titleElement.cloneNode(true) as HTMLElement;
+  source.querySelectorAll('.fwe-paw-badge').forEach((badge) => badge.remove());
+  return normalizeText(source.textContent);
+}
+
 export function parseArticle(root: HTMLElement, pageKind: PageKind): ParsedArticle {
   const header = root.querySelector<HTMLElement>(':scope > .entry-header');
   const entry = root.querySelector<HTMLElement>(':scope > .entry-content, :scope > .entry-summary');
   const titleElement = header?.querySelector<HTMLElement>('.entry-title') ?? null;
   const titleLink = titleElement?.querySelector<HTMLAnchorElement>('a') ?? null;
-  const title = normalizeText(titleElement?.textContent);
+  const title = parseTitleText(titleElement);
 
   if (!entry) {
     return {
@@ -443,6 +458,7 @@ export class DomTransaction {
   private readonly moved: DomRestoreRecord[] = [];
   private readonly attributes: AttributeRestoreRecord[] = [];
   private readonly generated: Node[] = [];
+  private readonly children: Array<{ element: Element; original: Node[] }> = [];
   private readonly classes: Array<{
     element: Element;
     className: string;
@@ -464,11 +480,13 @@ export class DomTransaction {
   }
 
   setAttribute(element: Element, name: string, value: string | null): void {
+    const index = [...element.attributes].findIndex((attribute) => attribute.name === name);
     this.attributes.push({
       element,
       name,
-      existed: element.hasAttribute(name),
+      existed: index >= 0,
       value: element.getAttribute(name),
+      index: index >= 0 ? index : null,
     });
     if (value === null) element.removeAttribute(name);
     else element.setAttribute(name, value);
@@ -485,20 +503,50 @@ export class DomTransaction {
     element.classList.add(className);
   }
 
+  /**
+   * Replaces an element's children while remembering the originals so
+   * `restore()` can put them back.
+   *
+   * Use this instead of assigning `innerHTML` on any node this transaction has
+   * touched: `move()` only records a node's original parent and sibling
+   * position, never its internal content, so an `innerHTML` write would survive
+   * restoration and leave the page in a state the user never chose.
+   */
+  setChildren(element: Element, nodes: Node[]): void {
+    this.children.push({ element, original: [...element.childNodes] });
+    element.replaceChildren(...nodes);
+  }
+
   onRestore(cleanup: () => void): void {
     this.cleanups.push(cleanup);
   }
 
   restore(): void {
     for (const cleanup of [...this.cleanups].reverse()) cleanup();
+    // Children first: a node captured here may also carry a `moved` record, and
+    // restoring its slot before replaying moves keeps both records consistent.
+    for (const record of [...this.children].reverse()) {
+      record.element.replaceChildren(...record.original);
+    }
     for (const record of [...this.moved].reverse()) {
       const before = record.nextSibling?.parentNode === record.parent ? record.nextSibling : null;
       record.parent.insertBefore(record.node, before);
     }
     for (const record of [...this.attributes].reverse()) {
-      if (record.existed && record.value !== null)
+      if (record.existed && record.value !== null) {
+        // A removed attribute can only be re-added at the end of the list, which
+        // would reorder the markup. Park the attributes that followed it, append
+        // the restored one, then put them back so the order stays byte-identical.
+        const parked =
+          record.index !== null && !record.element.hasAttribute(record.name)
+            ? [...record.element.attributes]
+                .slice(record.index)
+                .map((attribute) => ({ name: attribute.name, value: attribute.value }))
+            : [];
+        parked.forEach((attribute) => record.element.removeAttribute(attribute.name));
         record.element.setAttribute(record.name, record.value);
-      else record.element.removeAttribute(record.name);
+        parked.forEach((attribute) => record.element.setAttribute(attribute.name, attribute.value));
+      } else record.element.removeAttribute(record.name);
     }
     for (const record of [...this.classes].reverse()) {
       if (record.existed && record.value !== null)
@@ -510,6 +558,7 @@ export class DomTransaction {
     this.attributes.length = 0;
     this.classes.length = 0;
     this.generated.length = 0;
+    this.children.length = 0;
     this.cleanups.length = 0;
   }
 }
@@ -623,4 +672,27 @@ export function formatRelativeTime(
   }
   const years = Math.floor(days / 365);
   return isZh ? `${years}年前` : `${years}y ago`;
+}
+
+/**
+ * Relative wording for the date chip, scoped to the last few days.
+ *
+ * `formatRelativeTime` keeps inventing wording for months and years, which is
+ * noise on a stream card that already shows the absolute date. Past the recent
+ * window this returns `''` so the chip can fall back to the date alone.
+ */
+export function formatRecentRelativeTime(
+  date: Date | string,
+  now: Date = new Date(),
+  lang: SupportedLanguage = 'en',
+  maxDays = 7,
+): string {
+  const relative = formatRelativeTime(date, now, lang);
+  if (!relative) return '';
+
+  const targetDate = typeof date === 'string' ? parseDateString(date) : date;
+  if (!targetDate || Number.isNaN(targetDate.getTime())) return '';
+
+  const diffDays = Math.floor((now.getTime() - targetDate.getTime()) / 86400000);
+  return diffDays >= maxDays ? '' : relative;
 }
